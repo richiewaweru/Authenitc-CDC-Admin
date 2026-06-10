@@ -1,0 +1,107 @@
+@import 'tailwindcss';
+
+@theme {
+	--font-sans: 'Inter', sans-serif;
+	--font-display: 'Playfair Display', serif;
+
+	--color-primary-dark: #082717;
+	--color-primary: #1f3d2b;
+	--color-on-primary: #ffffff;
+	--color-background: #f7f5f2;
+	--color-surface: #fbf9f6;
+	--color-sand: #e9e2d6;
+	--color-on-surface: #1b1c1a;
+	--color-on-surface-variant: #424843;
+	--color-success: #e2f2e8;
+	--color-warning: #ffdf95;
+	--color-error: #ffdada;
+	--color-error-strong: #ba1a1a;
+	--color-info: #d6e2ff;
+	--color-info-strong: #001a41;
+
+	--radius-card: 1rem;
+	--radius-shell: 1.5rem;
+	--shadow-card: 0 1px 3px rgb(0 0 0 / 0.05);
+}
+
+:root {
+	color-scheme: light;
+}
+
+html {
+	background: var(--color-background);
+}
+
+body {
+	min-height: 100vh;
+	background:
+		radial-gradient(circle at top right, rgb(255 255 255 / 0.7), transparent 32%),
+		linear-gradient(180deg, #f7f5f2 0%, #f2ede5 100%);
+	color: var(--color-on-surface);
+	font-family: var(--font-sans);
+}
+
+a,
+button,
+input,
+textarea,
+select {
+	transition:
+		background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+		border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+		color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+		box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+		transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+}
+
+@layer base {
+	h1,
+	h2,
+	h3,
+	h4 {
+		font-family: var(--font-display);
+	}
+}
+
+@layer components {
+	.card {
+		@apply rounded-[var(--radius-card)] border border-sand bg-surface shadow-[var(--shadow-card)];
+	}
+
+	.panel-title {
+		@apply font-display text-[1.65rem] leading-tight font-semibold text-on-surface;
+	}
+
+	.section-eyebrow {
+		@apply text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-on-surface-variant;
+	}
+
+	.text-muted {
+		@apply text-sm text-on-surface-variant;
+	}
+
+	.input-base {
+		@apply w-full rounded-2xl border border-sand bg-white px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/70 focus:border-primary focus:outline-none;
+	}
+
+	.button-primary {
+		@apply inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-on-primary hover:-translate-y-0.5 hover:bg-primary-dark;
+	}
+
+	.button-secondary {
+		@apply inline-flex items-center justify-center rounded-2xl border border-sand bg-surface px-4 py-2.5 text-sm font-semibold text-on-surface hover:bg-background;
+	}
+
+	.badge {
+		@apply inline-flex items-center rounded-full px-3 py-1 text-[0.72rem] font-semibold tracking-[0.04em];
+	}
+
+	.shell-card {
+		@apply rounded-[var(--radius-card)] border border-sand bg-surface p-5 shadow-[var(--shadow-card)];
+	}
+}
