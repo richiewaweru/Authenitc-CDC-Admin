@@ -1,9 +1,10 @@
 import { redirect } from '@sveltejs/kit';
 
+import { resolveAppRole } from '$lib/server/roles';
 import { getUserSummary, getVisibleSidebarItems, isStaffRole, type AppRole } from '$lib/types';
 import type { LayoutServerLoad } from './$types';
 
-const PUBLIC_ROUTES = new Set(['/login', '/access-denied']);
+const PUBLIC_ROUTES = new Set(['/login', '/access-denied', '/auth/callback']);
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
 	const { session, user } = await locals.safeGetSession();
@@ -24,9 +25,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 		};
 	}
 
-	const { data: resolvedRole, error } = await locals.supabase.rpc('get_my_role');
-	const role: AppRole | null = !error && resolvedRole ? (resolvedRole as AppRole) : null;
-	locals.role = role;
+	const role = (await resolveAppRole(locals)) as AppRole | null;
 
 	if (!isStaffRole(role)) {
 		if (pathname !== '/access-denied') {

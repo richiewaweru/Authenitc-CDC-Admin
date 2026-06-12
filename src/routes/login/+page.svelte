@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+import { goto } from '$app/navigation';
 
-	import { getSupabaseBrowserClient } from '$lib/supabase';
+import { finalizeStaffInviteSession } from '$lib/staffInvites';
+import { getSupabaseBrowserClient } from '$lib/supabase';
 
 	let email = $state('');
 	let password = $state('');
@@ -26,6 +27,18 @@
 
 		if (error) {
 			errorMessage = error.message;
+			loading = false;
+			return;
+		}
+
+		try {
+			await finalizeStaffInviteSession();
+		} catch (finalizeError) {
+			await supabase.auth.signOut();
+			errorMessage =
+				finalizeError instanceof Error
+					? finalizeError.message
+					: 'Could not finish linking your staff access.';
 			loading = false;
 			return;
 		}

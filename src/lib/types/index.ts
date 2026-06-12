@@ -2,7 +2,7 @@ import type { User } from '@supabase/supabase-js';
 
 import type { AppRole } from './database';
 
-export type { AppRole, Database } from './database';
+export type { AppRole, BookingStatus, Database, PaymentStatus, UserState } from './database';
 
 export type StaffRole = Exclude<AppRole, 'member'>;
 export type LayoutMode = 'app' | 'plain';

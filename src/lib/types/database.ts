@@ -11,8 +11,11 @@ export type Database = {
 					avatar_url: string | null;
 					role: AppRole;
 					suspended: boolean;
+					onboarding_complete: boolean | null;
+					user_state: UserState | null;
 					last_sign_in_at: string | null;
 					created_at: string | null;
+					updated_at: string | null;
 				};
 				Insert: {
 					id?: string;
@@ -21,8 +24,11 @@ export type Database = {
 					avatar_url?: string | null;
 					role?: AppRole;
 					suspended?: boolean;
+					onboarding_complete?: boolean | null;
+					user_state?: UserState | null;
 					last_sign_in_at?: string | null;
 					created_at?: string | null;
+					updated_at?: string | null;
 				};
 				Update: {
 					email?: string | null;
@@ -30,8 +36,11 @@ export type Database = {
 					avatar_url?: string | null;
 					role?: AppRole;
 					suspended?: boolean;
+					onboarding_complete?: boolean | null;
+					user_state?: UserState | null;
 					last_sign_in_at?: string | null;
 					created_at?: string | null;
+					updated_at?: string | null;
 				};
 				Relationships: [];
 			};
@@ -126,6 +135,9 @@ export type Database = {
 					user_id: string;
 					guide_id: string;
 					slot_id: string;
+					slot_date: string | null;
+					slot_time: string | null;
+					duration_minutes: number | null;
 					status: BookingStatus | null;
 					payment_status: PaymentStatus | null;
 					stripe_payment_intent_id: string | null;
@@ -141,6 +153,9 @@ export type Database = {
 					user_id: string;
 					guide_id: string;
 					slot_id: string;
+					slot_date?: string | null;
+					slot_time?: string | null;
+					duration_minutes?: number | null;
 					status?: BookingStatus | null;
 					payment_status?: PaymentStatus | null;
 					stripe_payment_intent_id?: string | null;
@@ -155,6 +170,9 @@ export type Database = {
 					user_id?: string;
 					guide_id?: string;
 					slot_id?: string;
+					slot_date?: string | null;
+					slot_time?: string | null;
+					duration_minutes?: number | null;
 					status?: BookingStatus | null;
 					payment_status?: PaymentStatus | null;
 					stripe_payment_intent_id?: string | null;
@@ -240,3 +258,12 @@ export type AppRole = 'admin' | 'moderator' | 'guide' | 'member';
 export type BookingStatus = 'confirmed' | 'completed' | 'cancelled' | 'no_show';
 export type PaymentStatus = 'pending' | 'paid' | 'refunded' | 'failed';
 export type SlotStatus = 'open' | 'booked' | 'completed' | 'cancelled';
+export type UserState =
+	| 'authenticated'
+	| 'onboarding_incomplete'
+	| 'onboarding_complete'
+	| 'conversation_scheduled'
+	| 'conversation_approved'
+	| 'membership_active'
+	| 'bylaws_accepted'
+	| 'full_member';
