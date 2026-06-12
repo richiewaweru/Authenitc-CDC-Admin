@@ -18,31 +18,53 @@ import { getSupabaseBrowserClient } from '$lib/supabase';
 		const supabase = getSupabaseBrowserClient();
 
 		try {
-			const { data, error } = await supabase.auth.getSession();
+			const hashParams = new URLSearchParams(window.location.hash.substring(1));
+			const accessToken = hashParams.get('access_token');
+			const refreshToken = hashParams.get('refresh_token');
 
-			if (error) {
-				expired = true;
-				errorMessage = 'This invite link is invalid or has expired.';
-				loading = false;
-				return;
-			}
+			if (accessToken && refreshToken) {
+				const { data, error } = await supabase.auth.setSession({
+					access_token: accessToken,
+					refresh_token: refreshToken
+				});
 
-			if (data.session) {
-				try {
-					await finalizeStaffInviteSession();
-				} catch {
+				if (error || !data.session) {
 					expired = true;
-					errorMessage =
-						'We could not finish linking your staff access. Please ask an admin to refresh your invite.';
+					errorMessage = 'This invite link is invalid or has expired.';
 					loading = false;
 					return;
 				}
 
-				needsPassword = true;
+				history.replaceState(null, '', window.location.pathname + window.location.search);
 			} else {
-				expired = true;
-				errorMessage = 'This invite link is invalid or has already been used.';
+				const { data, error } = await supabase.auth.getSession();
+
+				if (error) {
+					expired = true;
+					errorMessage = 'This invite link is invalid or has expired.';
+					loading = false;
+					return;
+				}
+
+				if (!data.session) {
+					expired = true;
+					errorMessage = 'This invite link is invalid or has already been used.';
+					loading = false;
+					return;
+				}
 			}
+
+			try {
+				await finalizeStaffInviteSession();
+			} catch {
+				expired = true;
+				errorMessage =
+					'We could not finish linking your staff access. Please ask an admin to refresh your invite.';
+				loading = false;
+				return;
+			}
+
+			needsPassword = true;
 		} catch {
 			expired = true;
 			errorMessage = 'Something went wrong while verifying your invite.';
