@@ -21,6 +21,7 @@
 	let selectedTimes = $state<string[]>([]);
 	let customTime = $state('');
 	let excludeWeekends = $state(true);
+	let guidePublishUnavailable = $derived(Boolean(data.publishDisabledReason));
 
 	function buildHref(week: string, view = data.filters.view, guide = data.filters.guide) {
 		const params = new URLSearchParams();
@@ -78,6 +79,10 @@
 	}
 
 	function openPublishModal() {
+		if (guidePublishUnavailable) {
+			return;
+		}
+
 		resetPublishForm();
 		publishError = '';
 		publishModalOpen = true;
@@ -212,12 +217,22 @@
 		</div>
 
 		{#if data.canPublish}
-			<button type="button" class="button-primary w-full sm:w-auto" onclick={openPublishModal}>
+			<button
+				type="button"
+				class="button-primary w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+				onclick={openPublishModal}
+				disabled={guidePublishUnavailable}
+			>
 				Publish slots
 			</button>
+			{#if data.publishDisabledReason}
+				<div class="rounded-2xl border border-sand bg-surface px-4 py-3 text-sm text-on-surface-variant">
+					{data.publishDisabledReason}
+				</div>
+			{/if}
 		{:else}
 			<div class="rounded-2xl border border-sand bg-surface px-4 py-3 text-sm text-on-surface-variant">
-				Guide accounts are read-only here and only show their own availability.
+				Only staff members can publish or edit slots from this screen.
 			</div>
 		{/if}
 	</div>
@@ -327,9 +342,9 @@
 			<div class="rounded-[24px] border border-dashed border-sand bg-background p-6 text-center">
 				<p class="text-sm font-semibold text-on-surface">No slots are visible in this week yet.</p>
 				<p class="mt-2 text-sm text-on-surface-variant">
-					{data.canPublish
+					{data.canPublish && !data.publishDisabledReason
 						? 'Use Publish slots to seed the schedule for this week.'
-						: 'Your staff team has not published availability for this week yet.'}
+						: data.publishDisabledReason ?? 'Your staff team has not published availability for this week yet.'}
 				</p>
 			</div>
 		{:else if data.filters.view === 'calendar'}
@@ -730,15 +745,27 @@
 			class="mt-8 space-y-5"
 			use:enhance={publishEnhance}
 		>
-			<div class="space-y-2">
-				<label class="text-sm font-semibold text-on-surface" for="guideId">Guide</label>
-				<select id="guideId" name="guideId" class="input-base" bind:value={publishGuideId} required>
-					<option value="" disabled>Select a guide</option>
-					{#each data.guides as guide}
-						<option value={guide.id}>{guide.label}</option>
-					{/each}
-				</select>
-			</div>
+			{#if data.role === 'admin' || data.role === 'moderator'}
+				<div class="space-y-2">
+					<label class="text-sm font-semibold text-on-surface" for="guideId">Guide</label>
+					<select id="guideId" name="guideId" class="input-base" bind:value={publishGuideId} required>
+						<option value="" disabled>Select a guide</option>
+						{#each data.guides as guide}
+							<option value={guide.id}>{guide.label}</option>
+						{/each}
+					</select>
+				</div>
+			{:else}
+				<input type="hidden" name="guideId" value={data.guides[0]?.id ?? ''} />
+				<div class="rounded-[24px] border border-sand bg-background px-4 py-4 text-sm text-on-surface-variant">
+					{#if data.guides[0]}
+						Slots will be published under your guide profile,
+						<span class="font-semibold text-on-surface">{data.guides[0].label}</span>.
+					{:else}
+						Your account is not linked to a guide profile yet, so slot publishing is unavailable.
+					{/if}
+				</div>
+			{/if}
 
 			<div class="grid gap-4 sm:grid-cols-2">
 				<div class="space-y-2">
@@ -851,7 +878,11 @@
 
 			<div class="flex justify-end gap-3 pt-2">
 				<button type="button" class="button-secondary" onclick={closePublishModal}>Cancel</button>
-				<button type="submit" class="button-primary" disabled={publishSubmitting}>
+				<button
+					type="submit"
+					class="button-primary"
+					disabled={publishSubmitting || (data.role === 'guide' && !data.guides[0])}
+				>
 					{publishSubmitting ? 'Publishing...' : 'Publish slots'}
 				</button>
 			</div>

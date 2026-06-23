@@ -152,6 +152,16 @@ function normalizeDuration(value: string | null) {
 	return Number.isNaN(parsed) || parsed < 15 ? 30 : parsed;
 }
 
+async function getMyGuideId(locals: App.Locals) {
+	const { data, error } = await locals.supabase.rpc('get_my_guide_id');
+
+	if (error) {
+		return { guideId: null, error: error.message };
+	}
+
+	return { guideId: data, error: null };
+}
+
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const resolvedRole = await resolveAppRole(locals);
 
@@ -349,7 +359,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	return {
 		role,
-		canPublish: role === 'admin' || role === 'moderator',
+		canPublish: role === 'admin' || role === 'moderator' || role === 'guide',
+		publishDisabledReason:
+			role === 'guide' && !guideId
+				? 'Your account is not linked to a guide profile yet.'
+				: null,
 		guides,
 		filters: {
 			view,
@@ -377,9 +391,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 export const actions: Actions = {
 	publishSlots: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);
+		const isGuide = role === 'guide';
+		const isStaff = role === 'admin' || role === 'moderator';
 
-		if (role !== 'admin' && role !== 'moderator') {
-			return fail(403, { message: 'Only admins and moderators can publish slots.' });
+		if (!isStaff && !isGuide) {
+			return fail(403, { message: 'Only staff members can publish slots.' });
 		}
 
 		const { session } = await locals.safeGetSession();
@@ -395,7 +411,23 @@ export const actions: Actions = {
 		);
 		const timeKeys = uniqueStrings(customTime ? [...selectedTimes, customTime] : selectedTimes);
 
-		if (!guideId) {
+		let resolvedGuideId = guideId;
+
+		if (isGuide) {
+			const { guideId: myGuideId, error } = await getMyGuideId(locals);
+
+			if (error) {
+				return fail(500, { message: error });
+			}
+
+			if (!myGuideId) {
+				return fail(403, { message: 'Your account is not linked to a guide profile yet.' });
+			}
+
+			resolvedGuideId = myGuideId;
+		}
+
+		if (!resolvedGuideId) {
 			return fail(400, { message: 'Choose a guide before publishing slots.' });
 		}
 
@@ -417,7 +449,7 @@ export const actions: Actions = {
 		const { data: guide, error: guideError } = await locals.supabase
 			.from('guide_profiles')
 			.select('id, display_name, name, email, is_active')
-			.eq('id', guideId)
+			.eq('id', resolvedGuideId)
 			.maybeSingle();
 
 		if (guideError) {
@@ -431,7 +463,7 @@ export const actions: Actions = {
 		const { data: existingSlots, error: existingSlotsError } = await locals.supabase
 			.from('available_slots')
 			.select('id, slot_date, slot_time')
-			.eq('guide_id', guideId)
+			.eq('guide_id', resolvedGuideId)
 			.gte('slot_date', startDate)
 			.lte('slot_date', endDate);
 
@@ -467,7 +499,7 @@ export const actions: Actions = {
 				}
 
 				slotPayloads.push({
-					guide_id: guideId,
+					guide_id: resolvedGuideId,
 					slot_date: dateKey,
 					slot_time: `${timeKey}:00`,
 					starts_at: new Date(`${dateKey}T${timeKey}:00`).toISOString(),
@@ -499,9 +531,11 @@ export const actions: Actions = {
 	},
 	updateSlotStatus: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);
+		const isStaff = role === 'admin' || role === 'moderator';
+		const isGuide = role === 'guide';
 
-		if (role !== 'admin' && role !== 'moderator') {
-			return fail(403, { message: 'Only admins and moderators can update slot status.' });
+		if (!isStaff && !isGuide) {
+			return fail(403, { message: 'Only staff members can update slot status.' });
 		}
 
 		const formData = await request.formData();
@@ -528,6 +562,22 @@ export const actions: Actions = {
 			return fail(404, { message: 'That slot could not be found.' });
 		}
 
+		if (isGuide) {
+			const { guideId: myGuideId, error } = await getMyGuideId(locals);
+
+			if (error) {
+				return fail(500, { message: error });
+			}
+
+			if (!myGuideId) {
+				return fail(403, { message: 'Your account is not linked to a guide profile yet.' });
+			}
+
+			if (slot.guide_id !== myGuideId) {
+				return fail(403, { message: 'You can only update your own slots.' });
+			}
+		}
+
 		if (!STAFF_EDITABLE_SLOT_STATUSES.has((slot.status ?? 'open') as SlotStatus)) {
 			return fail(400, {
 				message: 'Only open or cancelled slots can be changed from this screen right now.'
@@ -550,9 +600,11 @@ export const actions: Actions = {
 	},
 	deleteSlot: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);
+		const isStaff = role === 'admin' || role === 'moderator';
+		const isGuide = role === 'guide';
 
-		if (role !== 'admin' && role !== 'moderator') {
-			return fail(403, { message: 'Only admins and moderators can remove slots.' });
+		if (!isStaff && !isGuide) {
+			return fail(403, { message: 'Only staff members can remove slots.' });
 		}
 
 		const formData = await request.formData();
@@ -564,7 +616,7 @@ export const actions: Actions = {
 
 		const { data: slot, error: slotError } = await locals.supabase
 			.from('available_slots')
-			.select('id, status, slot_date, slot_time')
+			.select('id, status, guide_id, slot_date, slot_time')
 			.eq('id', slotId)
 			.maybeSingle();
 
@@ -574,6 +626,22 @@ export const actions: Actions = {
 
 		if (!slot) {
 			return fail(404, { message: 'That slot no longer exists.' });
+		}
+
+		if (isGuide) {
+			const { guideId: myGuideId, error } = await getMyGuideId(locals);
+
+			if (error) {
+				return fail(500, { message: error });
+			}
+
+			if (!myGuideId) {
+				return fail(403, { message: 'Your account is not linked to a guide profile yet.' });
+			}
+
+			if (slot.guide_id !== myGuideId) {
+				return fail(403, { message: 'You can only remove your own slots.' });
+			}
 		}
 
 		if (!STAFF_EDITABLE_SLOT_STATUSES.has((slot.status ?? 'open') as SlotStatus)) {

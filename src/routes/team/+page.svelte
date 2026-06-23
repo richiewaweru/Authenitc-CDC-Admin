@@ -6,6 +6,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 
+	type AdminRow = (typeof data.admins)[number];
 	type ModeratorRow = (typeof data.moderators)[number];
 	type PendingInviteRow = (typeof data.pendingInvites)[number];
 
@@ -14,6 +15,7 @@
 	let showModal = $state(false);
 	let inviteEmail = $state('');
 	let inviteRole = $state<'moderator' | 'guide'>('moderator');
+	let createGuideProfile = $state(false);
 	let guideName = $state('');
 	let guideTitle = $state('Community Guide');
 	let inviteError = $state('');
@@ -28,6 +30,12 @@
 		link: string;
 		message: string;
 	} | null>(null);
+	let adminGuideModalOpen = $state(false);
+	let selectedAdmin = $state<AdminRow | null>(null);
+	let adminGuideName = $state('');
+	let adminGuideTitle = $state('Community Guide');
+	let adminGuideError = $state('');
+	let adminGuideSubmitting = $state(false);
 
 	let matchedMember = $derived(
 		inviteRole === 'moderator'
@@ -127,6 +135,7 @@
 		showModal = false;
 		inviteEmail = '';
 		inviteRole = 'moderator';
+		createGuideProfile = false;
 		guideName = '';
 		guideTitle = 'Community Guide';
 		inviteError = '';
@@ -140,7 +149,26 @@
 	function openModal(role: 'moderator' | 'guide' = 'moderator') {
 		closeModal();
 		inviteRole = role;
+		createGuideProfile = role === 'guide';
 		showModal = true;
+	}
+
+	function closeAdminGuideModal() {
+		adminGuideModalOpen = false;
+		selectedAdmin = null;
+		adminGuideName = '';
+		adminGuideTitle = 'Community Guide';
+		adminGuideError = '';
+		adminGuideSubmitting = false;
+	}
+
+	function openAdminGuideModal(admin: AdminRow) {
+		selectedAdmin = admin;
+		adminGuideName = admin.guideProfileLabel ?? admin.label;
+		adminGuideTitle = admin.guideProfileTitle ?? 'Community Guide';
+		adminGuideError = '';
+		adminGuideSubmitting = false;
+		adminGuideModalOpen = true;
 	}
 
 	function getGuideInviteProfile(email: string) {
@@ -175,6 +203,28 @@
 				result.type === 'failure'
 					? result.data?.message ?? 'Could not update team access.'
 					: 'Something went wrong while updating team access.';
+		};
+	};
+
+	const syncAdminGuideProfileEnhance: SubmitFunction = () => {
+		adminGuideSubmitting = true;
+		adminGuideError = '';
+
+		return async ({ result, update }) => {
+			adminGuideSubmitting = false;
+
+			if (result.type === 'success') {
+				await update();
+				closeAdminGuideModal();
+				showToast(result.data?.message ?? 'Guide profile saved.');
+				return;
+			}
+
+			await applyAction(result);
+			adminGuideError =
+				result.type === 'failure'
+					? result.data?.message ?? 'Could not save the guide profile.'
+					: 'Something went wrong while saving the guide profile.';
 		};
 	};
 
@@ -388,14 +438,31 @@
 										{#if admin.isCurrentUser}
 											<span class="badge bg-info text-info-strong">you</span>
 										{/if}
+										<span
+											class={`badge ${admin.hasGuideProfile ? 'bg-success text-primary-dark' : 'bg-background text-on-surface-variant'}`}
+										>
+											{admin.hasGuideProfile ? 'Guide profile linked' : 'No guide profile'}
+										</span>
 									</div>
 									<p class="break-all text-xs text-on-surface-variant sm:truncate">{admin.email}</p>
 									<p class="mt-1 text-xs text-on-surface-variant">
 										Owner account | added {formatDate(admin.createdAt)}
 									</p>
+									<p class="mt-1 text-xs text-on-surface-variant">
+										{admin.hasGuideProfile
+											? `${admin.guideProfileLabel ?? admin.label} | ${admin.guideProfileTitle ?? 'Community Guide'}`
+											: 'Create a guide profile so this admin can appear in guide-facing slot pickers.'}
+									</p>
 								</div>
-								<div class="self-start sm:shrink-0">
+								<div class="flex flex-col gap-3 self-start sm:shrink-0">
 									<RoleBadge role="admin" />
+									<button
+										type="button"
+										class="button-secondary text-xs"
+										onclick={() => openAdminGuideModal(admin)}
+									>
+										{admin.hasGuideProfile ? 'Update guide profile' : 'Create guide profile'}
+									</button>
 								</div>
 							</div>
 						</div>
@@ -540,7 +607,10 @@
 										>
 											<input type="hidden" name="email" value={invite.email} />
 											<input type="hidden" name="role" value={invite.role} />
-											{#if invite.role === 'guide' && getGuideInviteProfile(invite.email)}
+											{#if invite.createGuideProfile}
+												<input type="hidden" name="createGuideProfile" value="true" />
+											{/if}
+											{#if (invite.role === 'guide' || invite.createGuideProfile) && getGuideInviteProfile(invite.email)}
 												<input
 													type="hidden"
 													name="guideName"
@@ -701,10 +771,26 @@
 								No existing member matches this email yet, so we will prepare an invite they can use to set their password and activate moderator access later.
 							</p>
 						{/if}
+
+						<div class="mt-4 rounded-2xl border border-sand bg-surface px-4 py-4">
+							<label class="flex items-center gap-3 text-sm font-medium text-on-surface">
+								<input
+									type="checkbox"
+									name="createGuideProfile"
+									value="true"
+									bind:checked={createGuideProfile}
+									class="h-4 w-4 accent-primary"
+								/>
+								<span>Also create a guide profile</span>
+							</label>
+							<p class="mt-2 text-sm text-on-surface-variant">
+								Use this when the moderator should also appear as a guide in slot pickers and conduct conversations.
+							</p>
+						</div>
 					</div>
 				{/if}
 
-				{#if inviteRole === 'guide'}
+				{#if inviteRole === 'guide' || (inviteRole === 'moderator' && createGuideProfile)}
 					<div class="space-y-4 rounded-[24px] border border-sand bg-background p-4">
 						<p class="section-eyebrow">Guide Profile Details</p>
 						<div class="space-y-2">
@@ -752,6 +838,83 @@
 						{:else}
 							Create moderator invite
 						{/if}
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
+
+{#if adminGuideModalOpen && selectedAdmin}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="fixed inset-0 z-40 bg-primary-dark/40 backdrop-blur-sm"
+		onclick={closeAdminGuideModal}
+		onkeydown={(event) => event.key === 'Escape' && closeAdminGuideModal()}
+	></div>
+
+	<div class="fixed inset-0 z-50 flex items-center justify-center px-4">
+		<div
+			class="w-full max-w-lg rounded-[28px] border border-sand bg-surface p-6 shadow-[0_24px_80px_rgba(8,39,23,0.12)] sm:p-8"
+			role="dialog"
+			aria-labelledby="admin-guide-modal-title"
+		>
+			<div class="space-y-2">
+				<p class="section-eyebrow">
+					{selectedAdmin.hasGuideProfile ? 'Update Guide Profile' : 'Create Guide Profile'}
+				</p>
+				<h2 id="admin-guide-modal-title" class="font-display text-2xl font-semibold text-on-surface">
+					{selectedAdmin.label}
+				</h2>
+				<p class="text-sm leading-7 text-on-surface-variant">
+					Save a guide profile for this admin so they can appear in guide-facing slot pickers and manage guide-owned availability cleanly.
+				</p>
+			</div>
+
+			<form
+				class="mt-6 space-y-5"
+				method="POST"
+				action="?/syncAdminGuideProfile"
+				use:enhance={syncAdminGuideProfileEnhance}
+			>
+				<input type="hidden" name="adminId" value={selectedAdmin.id} />
+
+				<div class="space-y-2">
+					<label class="text-sm font-semibold text-on-surface" for="admin-guide-name">Display name</label>
+					<input
+						id="admin-guide-name"
+						name="guideName"
+						type="text"
+						bind:value={adminGuideName}
+						class="input-base"
+						placeholder="Display name for members"
+						autocomplete="off"
+					/>
+				</div>
+
+				<div class="space-y-2">
+					<label class="text-sm font-semibold text-on-surface" for="admin-guide-title">Title</label>
+					<input
+						id="admin-guide-title"
+						name="guideTitle"
+						type="text"
+						bind:value={adminGuideTitle}
+						class="input-base"
+						placeholder="Community Guide"
+						autocomplete="off"
+					/>
+				</div>
+
+				{#if adminGuideError}
+					<div class="rounded-3xl border border-red-200 bg-error px-4 py-3 text-sm text-error-strong">
+						{adminGuideError}
+					</div>
+				{/if}
+
+				<div class="flex justify-end gap-3 pt-2">
+					<button type="button" class="button-secondary" onclick={closeAdminGuideModal}>Cancel</button>
+					<button type="submit" class="button-primary" disabled={adminGuideSubmitting}>
+						{adminGuideSubmitting ? 'Saving...' : 'Save guide profile'}
 					</button>
 				</div>
 			</form>

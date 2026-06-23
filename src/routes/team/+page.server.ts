@@ -9,7 +9,7 @@ type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type InviteRow = Database['public']['Tables']['invites']['Row'];
 type GuideRow = Database['public']['Tables']['guide_profiles']['Row'];
 
-type GuideInviteRole = 'moderator' | 'guide';
+type StaffInviteRole = 'moderator' | 'guide';
 type GuideAccountState = 'linked' | 'pending_setup' | 'profile_only';
 type AuthUserLike = {
 	id: string;
@@ -120,7 +120,7 @@ async function findAuthUserByEmail(email: string) {
 	}
 }
 
-async function stampPendingStaffRole(userId: string, role: GuideInviteRole) {
+async function stampPendingStaffRole(userId: string, role: StaffInviteRole) {
 	const adminSupabase = getSupabaseAdminClient();
 	const {
 		data: { user },
@@ -211,14 +211,17 @@ async function generateInviteLink(email: string, redirectTo: string) {
 
 async function createOrRefreshStaffAccess(params: {
 	email: string;
-	role: GuideInviteRole;
+	role: StaffInviteRole;
 	callerId: string;
 	redirectTo: string;
+	createGuideProfile?: boolean;
 	guideName?: string;
 	guideTitle?: string;
 }) {
 	const adminSupabase = getSupabaseAdminClient();
 	const existingUser = await findAuthUserByEmail(params.email);
+	const shouldSyncGuideProfile =
+		params.role === 'guide' || (params.role === 'moderator' && params.createGuideProfile);
 
 	if (existingUser?.email_confirmed_at) {
 		const { data: profile, error: profileError } = await adminSupabase
@@ -250,7 +253,7 @@ async function createOrRefreshStaffAccess(params: {
 			}
 		}
 
-		if (params.role === 'guide') {
+		if (shouldSyncGuideProfile) {
 			await syncGuideProfile({
 				userId: profile.id,
 				email: params.email,
@@ -286,7 +289,7 @@ async function createOrRefreshStaffAccess(params: {
 	const inviteLinkData = await generateInviteLink(params.email, params.redirectTo);
 	await stampPendingStaffRole(inviteLinkData.userId, params.role);
 
-	if (params.role === 'guide') {
+	if (shouldSyncGuideProfile) {
 		try {
 			await syncGuideProfile({
 				userId: inviteLinkData.userId,
@@ -451,14 +454,21 @@ async function loadTeamData(currentAdminId: string) {
 		viewerId: currentAdminId,
 		admins: staff
 			.filter((member) => member.role === 'admin')
-			.map((member) => ({
-				id: member.id,
-				email: member.email ?? 'unknown@authentic.app',
-				label: getProfileLabel(member),
-				lastSignInAt: member.last_sign_in_at,
-				createdAt: member.created_at,
-				isCurrentUser: member.id === currentAdminId
-			})),
+			.map((member) => {
+				const linkedGuideProfile = guides.find((guide) => guide.user_id === member.id);
+
+				return {
+					id: member.id,
+					email: member.email ?? 'unknown@authentic.app',
+					label: getProfileLabel(member),
+					lastSignInAt: member.last_sign_in_at,
+					createdAt: member.created_at,
+					isCurrentUser: member.id === currentAdminId,
+					hasGuideProfile: Boolean(linkedGuideProfile),
+					guideProfileLabel: linkedGuideProfile ? getGuideLabel(linkedGuideProfile) : null,
+					guideProfileTitle: linkedGuideProfile?.title ?? null
+				};
+			}),
 		moderators: staff
 			.filter((member) => member.role === 'moderator')
 			.map((member) => ({
@@ -490,16 +500,26 @@ async function loadTeamData(currentAdminId: string) {
 				createdAt: guide.created_at
 			};
 		}),
-		pendingInvites: invites.map((invite) => ({
-			id: invite.id,
-			email: invite.email,
-			role: invite.role,
-			createdAt: invite.created_at,
-			statusNote:
-				invite.role === 'guide' && pendingGuideInviteEmails.has(invite.email.toLowerCase())
-					? 'Guide setup link is still open.'
-					: 'Waiting for the recipient to finish setup.'
-		})),
+		pendingInvites: invites.map((invite) => {
+			const linkedGuideProfile =
+				guides.find((guide) => guide.email?.toLowerCase() === invite.email.toLowerCase()) ?? null;
+
+			return {
+				id: invite.id,
+				email: invite.email,
+				role: invite.role,
+				createdAt: invite.created_at,
+				createGuideProfile: invite.role === 'guide' || Boolean(linkedGuideProfile),
+				guideName: linkedGuideProfile ? getGuideLabel(linkedGuideProfile) : null,
+				guideTitle: linkedGuideProfile?.title ?? null,
+				statusNote:
+					invite.role === 'guide' && pendingGuideInviteEmails.has(invite.email.toLowerCase())
+						? 'Guide setup link is still open.'
+						: linkedGuideProfile
+							? 'Waiting for the recipient to finish setup. A guide profile is already linked to this invite.'
+							: 'Waiting for the recipient to finish setup.'
+			};
+		}),
 		memberCandidates: members,
 		issues
 	};
@@ -534,6 +554,7 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const email = normalizeEmail(formData.get('email'));
 		const role = formData.get('role')?.toString() === 'guide' ? 'guide' : 'moderator';
+		const createGuideProfile = formData.get('createGuideProfile') === 'true';
 		const guideName = formData.get('guideName')?.toString().trim() || undefined;
 		const guideTitle = formData.get('guideTitle')?.toString().trim() || undefined;
 
@@ -547,6 +568,7 @@ export const actions: Actions = {
 				role,
 				callerId: user.id,
 				redirectTo: new URL('/auth/callback', url.origin).toString(),
+				createGuideProfile,
 				guideName,
 				guideTitle
 			});
@@ -578,6 +600,7 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const email = normalizeEmail(formData.get('email'));
 		const role = formData.get('role')?.toString() === 'guide' ? 'guide' : 'moderator';
+		const createGuideProfile = formData.get('createGuideProfile') === 'true';
 		const guideName = formData.get('guideName')?.toString().trim() || undefined;
 		const guideTitle = formData.get('guideTitle')?.toString().trim() || undefined;
 
@@ -591,6 +614,7 @@ export const actions: Actions = {
 				role,
 				callerId: user.id,
 				redirectTo: new URL('/auth/callback', url.origin).toString(),
+				createGuideProfile,
 				guideName,
 				guideTitle
 			});
@@ -605,6 +629,64 @@ export const actions: Actions = {
 		} catch (error) {
 			return fail(500, {
 				message: error instanceof Error ? error.message : 'Could not refresh the invite.'
+			});
+		}
+	},
+	syncAdminGuideProfile: async ({ locals, request }) => {
+		if ((await resolveAppRole(locals)) !== 'admin') {
+			return fail(403, { message: 'Only admins can manage admin guide profiles.' });
+		}
+
+		const { user } = await locals.safeGetSession();
+
+		if (!user) {
+			return fail(401, { message: 'Your session expired. Please log in again.' });
+		}
+
+		const formData = await request.formData();
+		const adminId = formData.get('adminId')?.toString().trim() ?? '';
+		const guideName = formData.get('guideName')?.toString().trim() || undefined;
+		const guideTitle = formData.get('guideTitle')?.toString().trim() || undefined;
+
+		if (!adminId) {
+			return fail(400, { message: 'Admin id is required.' });
+		}
+
+		try {
+			const adminSupabase = getSupabaseAdminClient();
+			const { data: adminProfile, error: adminError } = await adminSupabase
+				.from('profiles')
+				.select('id, email, display_name, role')
+				.eq('id', adminId)
+				.maybeSingle();
+
+			if (adminError) {
+				throw new Error(adminError.message);
+			}
+
+			if (!adminProfile || adminProfile.role !== 'admin') {
+				throw new Error('Admin account not found.');
+			}
+
+			if (!adminProfile.email) {
+				throw new Error('The selected admin does not have an email address on file.');
+			}
+
+			await syncGuideProfile({
+				userId: adminProfile.id,
+				email: adminProfile.email,
+				guideName: guideName ?? adminProfile.display_name ?? undefined,
+				guideTitle,
+				callerId: user.id
+			});
+
+			return {
+				success: true,
+				message: `Guide profile saved for ${getProfileLabel(adminProfile)}.`
+			};
+		} catch (error) {
+			return fail(500, {
+				message: error instanceof Error ? error.message : 'Could not save the admin guide profile.'
 			});
 		}
 	},
