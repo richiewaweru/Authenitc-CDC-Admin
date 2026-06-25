@@ -186,6 +186,10 @@
 		};
 	}
 
+	function showMeetingLinkForm(slot: ListSlot) {
+		return (slot.status === 'booked' || slot.status === 'completed') && Boolean(slot.bookingId);
+	}
+
 	resetPublishForm();
 </script>
 
@@ -421,6 +425,44 @@
 							</div>
 						</div>
 
+						{#if showMeetingLinkForm(slot)}
+							<div class="mt-4">
+								<p class="section-eyebrow mb-2">Meeting link</p>
+								<form
+									method="POST"
+									action="?/updateMeetingLink"
+									use:enhance={slotActionEnhance(slot.id, 'meeting-link')}
+									class="flex gap-2"
+								>
+									<input type="hidden" name="bookingId" value={slot.bookingId ?? ''} />
+									<input
+										type="url"
+										name="meetingLink"
+										value={slot.meetingLink ?? ''}
+										placeholder="Paste Google Meet, Zoom, or Teams link..."
+										class="input-base flex-1 text-sm"
+									/>
+									<button
+										type="submit"
+										class="button-secondary shrink-0 text-sm"
+										disabled={slotActionSubmitting === `${slot.id}:meeting-link`}
+									>
+										{slotActionSubmitting === `${slot.id}:meeting-link` ? 'Saving...' : 'Save'}
+									</button>
+								</form>
+								{#if slot.meetingLink}
+									<a
+										href={slot.meetingLink}
+										target="_blank"
+										rel="noreferrer"
+										class="mt-1.5 block text-xs text-primary underline"
+									>
+										Test link ->
+									</a>
+								{/if}
+							</div>
+						{/if}
+
 						<div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
 							<span>{slot.durationMinutes} min</span>
 							{#if canMutateSlot(slot)}
@@ -490,6 +532,43 @@
 														<p>Payment {item.paymentStatus}</p>
 													{/if}
 												</div>
+												{#if showMeetingLinkForm(item)}
+													<div class="mt-3">
+														<p class="section-eyebrow mb-2">Meeting link</p>
+														<form
+															method="POST"
+															action="?/updateMeetingLink"
+															use:enhance={slotActionEnhance(item.id, 'meeting-link')}
+															class="space-y-2"
+														>
+															<input type="hidden" name="bookingId" value={item.bookingId ?? ''} />
+															<input
+																type="url"
+																name="meetingLink"
+																value={item.meetingLink ?? ''}
+																placeholder="Paste Google Meet, Zoom, or Teams link..."
+																class="input-base text-xs"
+															/>
+															<button
+																type="submit"
+																class="button-secondary w-full text-xs"
+																disabled={slotActionSubmitting === `${item.id}:meeting-link`}
+															>
+																{slotActionSubmitting === `${item.id}:meeting-link` ? 'Saving...' : 'Save'}
+															</button>
+														</form>
+														{#if item.meetingLink}
+															<a
+																href={item.meetingLink}
+																target="_blank"
+																rel="noreferrer"
+																class="mt-1.5 block text-xs text-primary underline"
+															>
+																Test link ->
+															</a>
+														{/if}
+													</div>
+												{/if}
 											</div>
 										{/each}
 									</div>
@@ -569,6 +648,44 @@
 							</div>
 						</div>
 
+						{#if showMeetingLinkForm(slot)}
+							<div class="mt-4">
+								<p class="section-eyebrow mb-2">Meeting link</p>
+								<form
+									method="POST"
+									action="?/updateMeetingLink"
+									use:enhance={slotActionEnhance(slot.id, 'meeting-link')}
+									class="flex gap-2"
+								>
+									<input type="hidden" name="bookingId" value={slot.bookingId ?? ''} />
+									<input
+										type="url"
+										name="meetingLink"
+										value={slot.meetingLink ?? ''}
+										placeholder="Paste Google Meet, Zoom, or Teams link..."
+										class="input-base flex-1 text-sm"
+									/>
+									<button
+										type="submit"
+										class="button-secondary shrink-0 text-sm"
+										disabled={slotActionSubmitting === `${slot.id}:meeting-link`}
+									>
+										{slotActionSubmitting === `${slot.id}:meeting-link` ? 'Saving...' : 'Save'}
+									</button>
+								</form>
+								{#if slot.meetingLink}
+									<a
+										href={slot.meetingLink}
+										target="_blank"
+										rel="noreferrer"
+										class="mt-1.5 block text-xs text-primary underline"
+									>
+										Test link ->
+									</a>
+								{/if}
+							</div>
+						{/if}
+
 						<div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
 							<span>{slot.durationMinutes} min</span>
 							{#if canMutateSlot(slot)}
@@ -613,6 +730,9 @@
 								Duration
 							</th>
 							<th class="border-b border-sand px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant">
+								Meeting Link
+							</th>
+							<th class="border-b border-sand px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant">
 								Status
 							</th>
 							{#if data.canPublish}
@@ -639,6 +759,50 @@
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface-variant">
 									{slot.durationMinutes} min
+								</td>
+								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface-variant">
+									{#if showMeetingLinkForm(slot)}
+										<div class="min-w-[260px] space-y-2">
+											<form
+												method="POST"
+												action="?/updateMeetingLink"
+												use:enhance={slotActionEnhance(slot.id, 'meeting-link')}
+												class="flex gap-2"
+											>
+												<input type="hidden" name="bookingId" value={slot.bookingId ?? ''} />
+												<input
+													type="url"
+													name="meetingLink"
+													value={slot.meetingLink ?? ''}
+													placeholder="Paste Google Meet, Zoom, or Teams link..."
+													class="input-base flex-1 text-sm"
+												/>
+												<button
+													type="submit"
+													class="button-secondary shrink-0 text-xs"
+													disabled={slotActionSubmitting === `${slot.id}:meeting-link`}
+												>
+													{slotActionSubmitting === `${slot.id}:meeting-link` ? 'Saving...' : 'Save'}
+												</button>
+											</form>
+											{#if slot.meetingLink}
+												<a
+													href={slot.meetingLink}
+													target="_blank"
+													rel="noreferrer"
+													class="block text-xs text-primary underline break-all"
+												>
+													{slot.meetingLink}
+												</a>
+											{/if}
+										</div>
+									{:else}
+										<span class="text-xs italic">
+											{slot.status === 'open' || slot.status === 'cancelled'
+												? 'Available after booking'
+												: 'No linked booking'}
+										</span>
+									{/if}
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4">
 									<div class="flex flex-wrap gap-2">

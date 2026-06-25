@@ -250,7 +250,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			? await locals.supabase
 					.from('bookings')
 					.select(
-						'id, user_id, guide_id, slot_id, status, payment_status, stripe_payment_intent_id, amount_paid, currency, cancelled_at, cancel_reason, created_at, updated_at'
+						'id, user_id, guide_id, slot_id, meeting_link, status, payment_status, stripe_payment_intent_id, amount_paid, currency, cancelled_at, cancel_reason, created_at, updated_at'
 					)
 					.in('slot_id', slotIds)
 			: { data: [] as BookingRow[], error: null };
@@ -333,8 +333,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			status: slot.status ?? 'open',
 			statusTone: buildSlotTone(slot.status ?? 'open'),
 			startsAt: slot.starts_at,
+			bookingId: booking?.id ?? null,
 			bookingStatus: booking?.status ?? null,
-			paymentStatus: booking?.payment_status ?? null
+			paymentStatus: booking?.payment_status ?? null,
+			meetingLink: booking?.meeting_link ?? null
 		};
 	});
 
@@ -597,6 +599,66 @@ export const actions: Actions = {
 			success: true,
 			message: `Slot ${slot.slot_date ?? ''} ${normalizeTimeKey(slot.slot_time) ? formatTimeLabel(normalizeTimeKey(slot.slot_time)!) : ''} is now ${nextStatus}.`
 		};
+	},
+	updateMeetingLink: async ({ locals, request }) => {
+		const role = await resolveAppRole(locals);
+		const isStaff = role === 'admin' || role === 'moderator';
+		const isGuide = role === 'guide';
+
+		if (!isStaff && !isGuide) {
+			return fail(403, { message: 'Only staff members can update meeting links.' });
+		}
+
+		const formData = await request.formData();
+		const bookingId = formData.get('bookingId')?.toString().trim() ?? '';
+		const meetingLink = formData.get('meetingLink')?.toString().trim() ?? '';
+
+		if (!bookingId) {
+			return fail(400, { message: 'Booking id is required.' });
+		}
+
+		if (meetingLink && !meetingLink.startsWith('https://')) {
+			return fail(400, { message: 'Please enter a valid https:// link.' });
+		}
+
+		if (isGuide) {
+			const { guideId: myGuideId, error } = await getMyGuideId(locals);
+
+			if (error) {
+				return fail(500, { message: error });
+			}
+
+			if (!myGuideId) {
+				return fail(403, { message: 'Your account is not linked to a guide profile yet.' });
+			}
+
+			const { data: booking, error: bookingError } = await locals.supabase
+				.from('bookings')
+				.select('guide_id')
+				.eq('id', bookingId)
+				.maybeSingle();
+
+			if (bookingError) {
+				return fail(500, { message: bookingError.message });
+			}
+
+			if (!booking || booking.guide_id !== myGuideId) {
+				return fail(403, {
+					message: 'You can only update meeting links for your own bookings.'
+				});
+			}
+		}
+
+		const { error } = await locals.supabase
+			.from('bookings')
+			.update({ meeting_link: meetingLink || null, updated_at: new Date().toISOString() })
+			.eq('id', bookingId);
+
+		if (error) {
+			return fail(500, { message: error.message });
+		}
+
+		return { success: true, message: 'Meeting link saved.' };
 	},
 	deleteSlot: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);

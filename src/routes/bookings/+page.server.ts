@@ -26,6 +26,7 @@ type BookingListItem = {
 	slotDate: string | null;
 	slotTime: string | null;
 	durationMinutes: number;
+	meetingLink: string | null;
 	amountPaid: number;
 	currency: string;
 	cancelledAt: string | null;
@@ -265,7 +266,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	let bookingsQuery = locals.supabase
 		.from('bookings')
 		.select(
-			'id, user_id, guide_id, slot_id, status, payment_status, stripe_payment_intent_id, amount_paid, currency, cancelled_at, cancel_reason, created_at, updated_at'
+			'id, user_id, guide_id, slot_id, meeting_link, status, payment_status, stripe_payment_intent_id, amount_paid, currency, cancelled_at, cancel_reason, created_at, updated_at'
 		)
 		.order('created_at', { ascending: false });
 
@@ -372,6 +373,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			slotDate: slot?.slot_date ?? null,
 			slotTime: slot?.slot_time ?? null,
 			durationMinutes: slot?.duration_minutes ?? 30,
+			meetingLink: booking.meeting_link ?? null,
 			amountPaid: booking.amount_paid ?? 0,
 			currency: booking.currency ?? 'usd',
 			cancelledAt: booking.cancelled_at,

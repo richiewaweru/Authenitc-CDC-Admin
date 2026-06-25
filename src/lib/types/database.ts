@@ -138,6 +138,7 @@ export type Database = {
 					slot_date: string | null;
 					slot_time: string | null;
 					duration_minutes: number | null;
+					meeting_link: string | null;
 					status: BookingStatus | null;
 					payment_status: PaymentStatus | null;
 					stripe_payment_intent_id: string | null;
@@ -156,6 +157,7 @@ export type Database = {
 					slot_date?: string | null;
 					slot_time?: string | null;
 					duration_minutes?: number | null;
+					meeting_link?: string | null;
 					status?: BookingStatus | null;
 					payment_status?: PaymentStatus | null;
 					stripe_payment_intent_id?: string | null;
@@ -173,6 +175,7 @@ export type Database = {
 					slot_date?: string | null;
 					slot_time?: string | null;
 					duration_minutes?: number | null;
+					meeting_link?: string | null;
 					status?: BookingStatus | null;
 					payment_status?: PaymentStatus | null;
 					stripe_payment_intent_id?: string | null;

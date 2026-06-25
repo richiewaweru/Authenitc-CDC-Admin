@@ -522,6 +522,24 @@
 				</div>
 			</div>
 
+			<div class="rounded-[24px] border border-sand bg-background p-4">
+				<p class="section-eyebrow">Meeting link</p>
+				{#if data.selectedBooking.meetingLink}
+					<a
+						href={data.selectedBooking.meetingLink}
+						target="_blank"
+						rel="noreferrer"
+						class="mt-3 block text-sm text-primary underline break-all"
+					>
+						{data.selectedBooking.meetingLink}
+					</a>
+				{:else}
+					<p class="mt-3 text-sm italic text-on-surface-variant">
+						No meeting link set yet - add one from the Slots page.
+					</p>
+				{/if}
+			</div>
+
 			{#if form?.message}
 				<div class="rounded-3xl border border-sand bg-background px-4 py-3 text-sm text-on-surface-variant">
 					{form.message}
