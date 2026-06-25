@@ -183,12 +183,14 @@
 	</div>
 
 	<div class="shell-card space-y-5">
-		<div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-			<form method="GET" class="grid gap-3 xl:grid-cols-[160px_180px_180px_minmax(0,1fr)_auto] xl:items-end">
+		<form
+			method="GET"
+			class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[minmax(0,160px)_minmax(0,180px)_minmax(0,180px)_minmax(0,180px)_minmax(0,1fr)]"
+		>
 				<input type="hidden" name="tab" value={data.filters.tab} />
 				<input type="hidden" name="page" value="1" />
 
-				<div class="space-y-2">
+				<div class="min-w-0 space-y-2">
 					<label class="text-sm font-semibold text-on-surface" for="status">Status</label>
 					<select id="status" name="status" class="input-base">
 						<option value="all" selected={data.filters.status === 'all'}>All statuses</option>
@@ -200,7 +202,7 @@
 				</div>
 
 				{#if data.role !== 'guide'}
-					<div class="space-y-2">
+					<div class="min-w-0 space-y-2">
 						<label class="text-sm font-semibold text-on-surface" for="guide">Guide</label>
 						<select id="guide" name="guide" class="input-base">
 							<option value="all" selected={data.filters.guide === 'all'}>All guides</option>
@@ -213,7 +215,7 @@
 					</div>
 				{/if}
 
-				<div class="space-y-2">
+				<div class="min-w-0 space-y-2">
 					<label class="text-sm font-semibold text-on-surface" for="payment">Payment</label>
 					<select id="payment" name="payment" class="input-base">
 						<option value="all" selected={data.filters.payment === 'all'}>All payments</option>
@@ -224,7 +226,7 @@
 					</select>
 				</div>
 
-				<div class="space-y-2">
+				<div class="min-w-0 space-y-2">
 					<label class="text-sm font-semibold text-on-surface" for="range">Date range</label>
 					<select id="range" name="range" class="input-base">
 						<option value="all" selected={data.filters.range === 'all'}>All dates</option>
@@ -234,26 +236,33 @@
 					</select>
 				</div>
 
-				<div class="space-y-2">
+				<div class="min-w-0 space-y-2 sm:col-span-2 lg:col-span-3 2xl:col-span-1">
 					<label class="text-sm font-semibold text-on-surface" for="search">Search</label>
 					<input
 						id="search"
 						name="search"
 						type="search"
 						value={data.filters.search}
-						class="input-base"
+						class="input-base min-w-0"
 						placeholder="Search members or guides"
 					/>
 				</div>
 
-				<div class="flex gap-3 pt-0 xl:pt-6">
+				<div class="flex flex-col gap-3 sm:col-span-2 sm:flex-row lg:col-span-3 2xl:col-span-5 2xl:justify-end">
 					<button type="submit" class="button-primary">Apply</button>
-					<a href={buildFilters({ tab: data.filters.tab, page: 1, search: '', guide: 'all', status: 'all', payment: 'all', range: 'all' })} class="button-secondary">
+					<a
+						href={buildFilters({ tab: data.filters.tab, page: 1, search: '', guide: 'all', status: 'all', payment: 'all', range: 'all' })}
+						class="button-secondary"
+					>
 						Reset
 					</a>
 				</div>
-			</form>
+		</form>
 
+		<div class="space-y-2 border-t border-sand/80 pt-4">
+			<p class="text-sm text-on-surface-variant">
+				Search and date range work together, so you can narrow the roster by both timing and member or guide details.
+			</p>
 			<div class="flex flex-wrap gap-3">
 				<a
 					href={buildFilters({ tab: 'all', page: 1, booking: null })}
