@@ -45,6 +45,11 @@
 		| 'updated_at'
 	>;
 
+	type StaffNotificationRow = Pick<
+		Database['public']['Tables']['staff_notifications']['Row'],
+		'id' | 'kind' | 'tone' | 'title' | 'detail' | 'href' | 'read' | 'created_at'
+	>;
+
 	let { role, user, navigation, children }: Props = $props();
 
 	const mobileItems = $derived(navigation.filter((item) => item.label !== 'Settings').slice(0, 5));
@@ -100,6 +105,19 @@
 
 	function asProfileNotificationRow(value: ProfileNotificationRow | {}) {
 		return value as ProfileNotificationRow;
+	}
+
+	function toAppNotification(row: StaffNotificationRow) {
+		return {
+			id: row.id,
+			kind: row.kind as AppNotification['kind'],
+			tone: row.tone as AppNotification['tone'],
+			title: row.title,
+			detail: row.detail,
+			href: row.href,
+			createdAt: row.created_at,
+			read: row.read
+		} satisfies AppNotification;
 	}
 
 	async function fetchProfileSummary(id: string | null) {
@@ -287,12 +305,43 @@
 
 	function markAllNotificationsRead() {
 		notificationStore.markAllRead();
+
+		void fetch('/api/notifications/read', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ all: true })
+		});
 	}
 
 	async function handleNotificationSelect(notification: AppNotification) {
 		notificationStore.markRead(notification.id);
 		closeNotifications();
+
+		void fetch('/api/notifications/read', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ ids: [notification.id] })
+		});
+
 		await goto(notification.href, { invalidateAll: true });
+	}
+
+	async function loadPersistedNotifications() {
+		const supabase = getSupabaseBrowserClient();
+		const { data, error } = await supabase
+			.from('staff_notifications')
+			.select('id, kind, tone, title, detail, href, read, created_at')
+			.eq('recipient_id', user.id)
+			.order('created_at', { ascending: false })
+			.limit(30);
+
+		if (error || !data) {
+			return;
+		}
+
+		for (const row of data as StaffNotificationRow[]) {
+			notificationStore.push(toAppNotification(row));
+		}
 	}
 
 	async function pollNotificationFeed() {
@@ -340,9 +389,22 @@
 
 		notificationStore.reset();
 		lastNotificationFeedAt = new Date().toISOString();
+		void loadPersistedNotifications();
 		const supabase = getSupabaseBrowserClient();
 		const channel = supabase
 			.channel(`layout-notifications:${user.id}`)
+			.on(
+				'postgres_changes',
+				{
+					event: 'INSERT',
+					schema: 'public',
+					table: 'staff_notifications',
+					filter: `recipient_id=eq.${user.id}`
+				},
+				(payload: RealtimePostgresChangesPayload<StaffNotificationRow>) => {
+					notificationStore.push(toAppNotification(payload.new as StaffNotificationRow));
+				}
+			)
 			.on(
 				'postgres_changes',
 				{ event: 'INSERT', schema: 'public', table: 'bookings' },

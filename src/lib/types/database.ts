@@ -235,6 +235,34 @@ export type Database = {
 				};
 				Relationships: [];
 			};
+			staff_notifications: {
+				Row: {
+					id: string;
+					recipient_id: string;
+					kind: 'booking' | 'payment' | 'onboarding' | 'team' | 'slot' | 'reminder';
+					tone: 'info' | 'success' | 'warning';
+					title: string;
+					detail: string;
+					href: string;
+					read: boolean;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					recipient_id: string;
+					kind: 'booking' | 'payment' | 'onboarding' | 'team' | 'slot' | 'reminder';
+					tone: 'info' | 'success' | 'warning';
+					title: string;
+					detail: string;
+					href?: string;
+					read?: boolean;
+					created_at?: string;
+				};
+				Update: {
+					read?: boolean;
+				};
+				Relationships: [];
+			};
 		};
 		Views: Record<string, never>;
 		Functions: {

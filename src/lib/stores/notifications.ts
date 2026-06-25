@@ -1,6 +1,12 @@
 import { writable } from 'svelte/store';
 
-export type NotificationKind = 'booking' | 'payment' | 'onboarding' | 'team';
+export type NotificationKind =
+	| 'booking'
+	| 'payment'
+	| 'onboarding'
+	| 'team'
+	| 'slot'
+	| 'reminder';
 export type NotificationTone = 'info' | 'success' | 'warning';
 
 export type AppNotification = {
