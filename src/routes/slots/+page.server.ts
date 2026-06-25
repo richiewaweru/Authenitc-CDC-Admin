@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 
 import { resolveAppRole } from '$lib/server/roles';
+import { toUtcIsoString } from '$lib/server/timezone';
 import type { SlotStatus } from '$lib/types/database';
 import { isStaffRole, type Database, type StaffRole } from '$lib/types';
 import type { Actions, PageServerLoad } from './$types';
@@ -132,6 +133,7 @@ function buildSlotTone(status: SlotStatus | null) {
 		case 'completed':
 			return 'info';
 		case 'cancelled':
+		case 'expired':
 			return 'danger';
 		default:
 			return 'success';
@@ -356,7 +358,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			acc[slot.status] += 1;
 			return acc;
 		},
-		{ total: 0, open: 0, booked: 0, completed: 0, cancelled: 0 }
+		{ total: 0, open: 0, booked: 0, completed: 0, cancelled: 0, expired: 0 }
 	);
 
 	return {
@@ -504,7 +506,7 @@ export const actions: Actions = {
 					guide_id: resolvedGuideId,
 					slot_date: dateKey,
 					slot_time: `${timeKey}:00`,
-					starts_at: new Date(`${dateKey}T${timeKey}:00`).toISOString(),
+					starts_at: toUtcIsoString(dateKey, timeKey),
 					duration_minutes: duration,
 					status: 'open',
 					created_by: session?.user.id ?? null,

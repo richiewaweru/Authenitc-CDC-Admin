@@ -288,7 +288,7 @@ export type Database = {
 export type AppRole = 'admin' | 'moderator' | 'guide' | 'member';
 export type BookingStatus = 'confirmed' | 'completed' | 'cancelled' | 'no_show';
 export type PaymentStatus = 'pending' | 'paid' | 'refunded' | 'failed';
-export type SlotStatus = 'open' | 'booked' | 'completed' | 'cancelled';
+export type SlotStatus = 'open' | 'booked' | 'completed' | 'cancelled' | 'expired';
 export type UserState =
 	| 'authenticated'
 	| 'onboarding_incomplete'
