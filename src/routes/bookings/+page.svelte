@@ -64,6 +64,62 @@
 		}).format(new Date(value));
 	}
 
+	function formatSlotDate(value: string | null) {
+		if (!value) {
+			return 'Date unavailable';
+		}
+
+		const [yearText, monthText, dayText] = value.split('-');
+		const year = Number.parseInt(yearText ?? '', 10);
+		const month = Number.parseInt(monthText ?? '', 10);
+		const day = Number.parseInt(dayText ?? '', 10);
+
+		if ([year, month, day].some((part) => Number.isNaN(part))) {
+			return value;
+		}
+
+		return new Intl.DateTimeFormat('en-US', {
+			weekday: 'short',
+			month: 'short',
+			day: 'numeric'
+		}).format(new Date(year, month - 1, day));
+	}
+
+	function formatSlotTime(value: string | null) {
+		if (!value) {
+			return 'Time unavailable';
+		}
+
+		const match = value.match(/^(\d{2}):(\d{2})/);
+
+		if (!match) {
+			return value;
+		}
+
+		const hours = Number.parseInt(match[1], 10);
+		const minutes = Number.parseInt(match[2], 10);
+
+		if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+			return value;
+		}
+
+		const suffix = hours >= 12 ? 'PM' : 'AM';
+		const normalizedHour = hours % 12 || 12;
+		return `${normalizedHour}:${match[2]} ${suffix}`;
+	}
+
+	function formatSchedule(date: string | null, time: string | null) {
+		if (!date || !time) {
+			return 'Schedule unavailable';
+		}
+
+		return `${formatSlotDate(date)} at ${formatSlotTime(time)}`;
+	}
+
+	function profileValue(value: string | null | undefined) {
+		return value?.trim() || 'Not provided';
+	}
+
 	function formatCurrency(amount: number, currency: string) {
 		try {
 			return new Intl.NumberFormat('en-US', {
@@ -317,7 +373,9 @@
 								</div>
 								<p class="text-xs text-on-surface-variant">{booking.memberEmail}</p>
 								<p class="text-sm text-on-surface-variant">{booking.guideLabel} | {booking.guideTitle}</p>
-								<p class="text-sm font-medium text-on-surface">{formatDateTime(booking.startsAt)}</p>
+								<p class="text-sm font-medium text-on-surface">
+									{formatSchedule(booking.slotDate, booking.slotTime)}
+								</p>
 								<div class="flex flex-wrap gap-2">
 									<span class={`badge ${paymentTone(booking.paymentStatus)}`}>
 										{booking.paymentStatus}
@@ -379,7 +437,9 @@
 									<p class="text-xs text-on-surface-variant">{booking.guideTitle}</p>
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4">
-									<p class="text-sm font-semibold text-on-surface">{formatDateTime(booking.startsAt)}</p>
+									<p class="text-sm font-semibold text-on-surface">
+										{formatSchedule(booking.slotDate, booking.slotTime)}
+									</p>
 									<p class="text-xs text-on-surface-variant">{booking.durationMinutes} minutes</p>
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4">
@@ -467,8 +527,20 @@
 						<p class="text-xs uppercase tracking-[0.12em] text-on-surface-variant">
 							{data.selectedBooking.memberRole}
 						</p>
+						<p class="text-sm text-on-surface-variant">
+							First name: {profileValue(data.selectedBooking.memberFirstName)}
+						</p>
+						<p class="text-sm text-on-surface-variant">
+							Gender: {profileValue(data.selectedBooking.memberGender)}
+						</p>
+						<p class="text-sm text-on-surface-variant">
+							City: {profileValue(data.selectedBooking.memberCityState)}
+						</p>
 					</div>
 				</div>
+				<p class="mt-4 text-sm leading-7 text-on-surface-variant">
+					Bio: {profileValue(data.selectedBooking.memberBio)}
+				</p>
 			</div>
 
 			<div class="rounded-[24px] border border-sand bg-background p-4">
@@ -494,7 +566,7 @@
 				<div class="rounded-[24px] border border-sand bg-background p-4">
 					<p class="section-eyebrow">Schedule</p>
 					<p class="mt-3 text-sm font-semibold text-on-surface">
-						{formatDateTime(data.selectedBooking.startsAt)}
+						{formatSchedule(data.selectedBooking.slotDate, data.selectedBooking.slotTime)}
 					</p>
 					<p class="mt-1 text-sm text-on-surface-variant">
 						{data.selectedBooking.durationMinutes} minutes
@@ -538,16 +610,64 @@
 						href={data.selectedBooking.meetingLink}
 						target="_blank"
 						rel="noreferrer"
-						class="mt-3 block text-sm text-primary underline break-all"
+						class="mt-3 inline-flex text-sm font-semibold text-primary underline"
+					>
+						Test link →
+					</a>
+					<a
+						href={data.selectedBooking.meetingLink}
+						target="_blank"
+						rel="noreferrer"
+						class="mt-2 block text-sm text-primary underline break-all"
 					>
 						{data.selectedBooking.meetingLink}
 					</a>
 				{:else}
 					<p class="mt-3 text-sm italic text-on-surface-variant">
-						No meeting link set yet - add one from the Slots page.
+						No meeting link set - add one from the Slots page.
 					</p>
 				{/if}
 			</div>
+
+			<details class="rounded-[24px] border border-sand bg-background p-4">
+				<summary class="cursor-pointer list-none text-sm font-semibold text-on-surface">
+					Member's Alignment Profile
+				</summary>
+				<div class="mt-4 space-y-2 text-sm text-on-surface-variant">
+					<p>
+						<span class="font-semibold text-on-surface">Relationship Goal:</span>
+						{profileValue(data.selectedBooking.alignmentProfile?.relationshipGoal)}
+					</p>
+					<p>
+						<span class="font-semibold text-on-surface">Communication Style:</span>
+						{profileValue(data.selectedBooking.alignmentProfile?.communicationStyle)}
+					</p>
+					<p>
+						<span class="font-semibold text-on-surface">Conflict Style:</span>
+						{profileValue(data.selectedBooking.alignmentProfile?.conflictStyle)}
+					</p>
+					<p>
+						<span class="font-semibold text-on-surface">Lifestyle Vision:</span>
+						{profileValue(data.selectedBooking.alignmentProfile?.lifestyleVision)}
+					</p>
+					<p>
+						<span class="font-semibold text-on-surface">Shared Faith:</span>
+						{profileValue(data.selectedBooking.alignmentProfile?.sharedFaith)}
+					</p>
+					<p>
+						<span class="font-semibold text-on-surface">Church Involvement:</span>
+						{profileValue(data.selectedBooking.alignmentProfile?.churchInvolvement)}
+					</p>
+					<p>
+						<span class="font-semibold text-on-surface">Future Hopes:</span>
+						{profileValue(data.selectedBooking.alignmentProfile?.futureHopes)}
+					</p>
+					<p>
+						<span class="font-semibold text-on-surface">Authentic Meaning:</span>
+						{profileValue(data.selectedBooking.alignmentProfile?.authenticMeaning)}
+					</p>
+				</div>
+			</details>
 
 			{#if form?.message}
 				<div class="rounded-3xl border border-sand bg-background px-4 py-3 text-sm text-on-surface-variant">
@@ -588,10 +708,6 @@
 							{actionSubmitting === 'cancel' ? 'Saving...' : 'Cancel Booking'}
 						</button>
 					</form>
-				{:else if data.role === 'guide'}
-					<p class="text-sm text-on-surface-variant">
-						Guide accounts can mark sessions complete, but cancellations stay with staff.
-					</p>
 				{/if}
 			</div>
 		</div>

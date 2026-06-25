@@ -7,8 +7,15 @@ export type Database = {
 				Row: {
 					id: string;
 					email: string | null;
+					first_name: string | null;
+					last_name: string | null;
 					display_name: string | null;
+					date_of_birth: string | null;
+					gender: string | null;
+					city_state: string | null;
+					bio: string | null;
 					avatar_url: string | null;
+					expo_push_token: string | null;
 					role: AppRole;
 					suspended: boolean;
 					onboarding_complete: boolean | null;
@@ -20,8 +27,15 @@ export type Database = {
 				Insert: {
 					id?: string;
 					email?: string | null;
+					first_name?: string | null;
+					last_name?: string | null;
 					display_name?: string | null;
+					date_of_birth?: string | null;
+					gender?: string | null;
+					city_state?: string | null;
+					bio?: string | null;
 					avatar_url?: string | null;
+					expo_push_token?: string | null;
 					role?: AppRole;
 					suspended?: boolean;
 					onboarding_complete?: boolean | null;
@@ -32,8 +46,15 @@ export type Database = {
 				};
 				Update: {
 					email?: string | null;
+					first_name?: string | null;
+					last_name?: string | null;
 					display_name?: string | null;
+					date_of_birth?: string | null;
+					gender?: string | null;
+					city_state?: string | null;
+					bio?: string | null;
 					avatar_url?: string | null;
+					expo_push_token?: string | null;
 					role?: AppRole;
 					suspended?: boolean;
 					onboarding_complete?: boolean | null;
@@ -192,12 +213,48 @@ export type Database = {
 				Row: {
 					id: string;
 					user_id: string;
+					relationship_goal: string | null;
+					communication_style: string | null;
+					conflict_style: string | null;
+					lifestyle_vision: string | null;
+					shared_faith: string | null;
+					church_involvement: string | null;
+					future_hopes: string | null;
+					authentic_meaning: string | null;
 					created_at: string | null;
 					updated_at: string | null;
 					[key: string]: Json | string | null;
 				};
-				Insert: Record<string, Json | string | null>;
-				Update: Record<string, Json | string | null>;
+				Insert: {
+					id?: string;
+					user_id: string;
+					relationship_goal?: string | null;
+					communication_style?: string | null;
+					conflict_style?: string | null;
+					lifestyle_vision?: string | null;
+					shared_faith?: string | null;
+					church_involvement?: string | null;
+					future_hopes?: string | null;
+					authentic_meaning?: string | null;
+					created_at?: string | null;
+					updated_at?: string | null;
+					[key: string]: Json | string | null | undefined;
+				};
+				Update: {
+					id?: string;
+					user_id?: string;
+					relationship_goal?: string | null;
+					communication_style?: string | null;
+					conflict_style?: string | null;
+					lifestyle_vision?: string | null;
+					shared_faith?: string | null;
+					church_involvement?: string | null;
+					future_hopes?: string | null;
+					authentic_meaning?: string | null;
+					created_at?: string | null;
+					updated_at?: string | null;
+					[key: string]: Json | string | null | undefined;
+				};
 				Relationships: [];
 			};
 			preferences: {

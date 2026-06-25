@@ -252,7 +252,7 @@
 		</div>
 	{/if}
 
-	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
 		<div class="shell-card space-y-2">
 			<p class="section-eyebrow">This Week</p>
 			<p class="font-display text-3xl font-semibold text-on-surface">{data.summary.total}</p>
@@ -277,6 +277,11 @@
 			<p class="section-eyebrow">Cancelled</p>
 			<p class="font-display text-3xl font-semibold text-on-surface">{data.summary.cancelled}</p>
 			<p class="text-sm text-on-surface-variant">Slots blocked out or cancelled.</p>
+		</div>
+		<div class="shell-card space-y-2">
+			<p class="section-eyebrow text-error-strong">Expired</p>
+			<p class="font-display text-3xl font-semibold text-on-surface">{data.summary.expired}</p>
+			<p class="text-sm text-on-surface-variant">Past slots automatically closed by the scheduler.</p>
 		</div>
 	</div>
 

@@ -114,7 +114,7 @@ async function fetchProfilesMap(
 	const { data, error } = await supabase
 		.from('profiles')
 		.select(
-			'id, email, display_name, avatar_url, role, suspended, onboarding_complete, user_state, last_sign_in_at, created_at, updated_at'
+			'id, email, first_name, last_name, display_name, date_of_birth, gender, city_state, bio, avatar_url, expo_push_token, role, suspended, onboarding_complete, user_state, last_sign_in_at, created_at, updated_at'
 		)
 		.in('id', ids);
 

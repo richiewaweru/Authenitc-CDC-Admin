@@ -8,6 +8,7 @@ type BookingRow = Database['public']['Tables']['bookings']['Row'];
 type SlotRow = Database['public']['Tables']['available_slots']['Row'];
 type GuideRow = Database['public']['Tables']['guide_profiles']['Row'];
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
+type OnboardingRow = Database['public']['Tables']['onboarding_responses']['Row'];
 
 type BookingTab = 'all' | 'upcoming' | 'pending_pay';
 type DateRangeFilter = 'all' | 'this_week' | 'next_30_days' | 'past';
@@ -304,7 +305,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			? await locals.supabase
 					.from('profiles')
 					.select(
-						'id, email, display_name, avatar_url, role, suspended, onboarding_complete, user_state, last_sign_in_at, created_at, updated_at'
+						'id, email, first_name, display_name, gender, city_state, bio, avatar_url, role, suspended, onboarding_complete, user_state, last_sign_in_at, created_at, updated_at'
 					)
 					.in('id', memberIds)
 			: { data: [] as ProfileRow[], error: null };
@@ -380,7 +381,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			cancelReason: booking.cancel_reason,
 			stripePaymentIntentId: booking.stripe_payment_intent_id,
 			canMarkComplete: bookingStatus === 'confirmed',
-			canCancel: role !== 'guide' && bookingStatus === 'confirmed'
+			canCancel: bookingStatus === 'confirmed'
 		};
 	});
 
@@ -406,6 +407,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const selectedMember = selectedBooking ? profilesMap.get(selectedBooking.memberId) ?? null : null;
 	const selectedGuide = selectedBooking ? guidesMap.get(selectedBooking.guideId) ?? null : null;
 	const selectedSlot = selectedBooking ? slotsMap.get(selectedBooking.slotId) ?? null : null;
+	const selectedOnboardingResult =
+		selectedBooking && selectedMember
+			? await locals.supabase
+					.from('onboarding_responses')
+					.select(
+						'user_id, relationship_goal, communication_style, conflict_style, lifestyle_vision, shared_faith, church_involvement, future_hopes, authentic_meaning'
+					)
+					.eq('user_id', selectedMember.id)
+					.maybeSingle()
+			: { data: null as OnboardingRow | null, error: null };
+
+	if (selectedOnboardingResult.error) {
+		issues.push(selectedOnboardingResult.error.message);
+	}
+
+	const selectedOnboarding = (selectedOnboardingResult.data as OnboardingRow | null) ?? null;
 
 	const allGuides = [...guidesMap.values()]
 		.map((guide) => ({
@@ -461,11 +478,27 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			? {
 					...selectedBooking,
 					memberAvatarUrl: selectedMember?.avatar_url ?? null,
+					memberFirstName: selectedMember?.first_name ?? null,
+					memberGender: selectedMember?.gender ?? null,
+					memberCityState: selectedMember?.city_state ?? null,
+					memberBio: selectedMember?.bio ?? null,
 					memberRole: selectedMember?.role ?? 'member',
 					guideAvatarUrl: selectedGuide?.avatar_url ?? null,
 					guideInitials: selectedGuide?.initials ?? null,
 					guideActive: selectedGuide?.is_active ?? true,
-					slotStatus: selectedSlot?.status ?? null
+					slotStatus: selectedSlot?.status ?? null,
+					alignmentProfile: selectedOnboarding
+						? {
+								relationshipGoal: selectedOnboarding.relationship_goal,
+								communicationStyle: selectedOnboarding.communication_style,
+								conflictStyle: selectedOnboarding.conflict_style,
+								lifestyleVision: selectedOnboarding.lifestyle_vision,
+								sharedFaith: selectedOnboarding.shared_faith,
+								churchInvolvement: selectedOnboarding.church_involvement,
+								futureHopes: selectedOnboarding.future_hopes,
+								authenticMeaning: selectedOnboarding.authentic_meaning
+							}
+						: null
 				}
 			: null,
 		issues
@@ -542,9 +575,11 @@ export const actions: Actions = {
 	},
 	cancelBooking: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);
+		const isStaff = role === 'admin' || role === 'moderator';
+		const isGuide = role === 'guide';
 
-		if (role !== 'admin' && role !== 'moderator') {
-			return fail(403, { message: 'Only admins and moderators can cancel bookings.' });
+		if (!isStaff && !isGuide) {
+			return fail(403, { message: 'Only staff members can cancel bookings.' });
 		}
 
 		const formData = await request.formData();
@@ -575,6 +610,18 @@ export const actions: Actions = {
 			return fail(400, { message: 'Only confirmed bookings can be cancelled from this screen.' });
 		}
 
+		if (isGuide) {
+			const { data: guideId, error: guideIdError } = await locals.supabase.rpc('get_my_guide_id');
+
+			if (guideIdError) {
+				return fail(500, { message: guideIdError.message });
+			}
+
+			if (!guideId || guideId !== booking.guide_id) {
+				return fail(403, { message: 'You can only cancel your own bookings.' });
+			}
+		}
+
 		const timestamp = new Date().toISOString();
 
 		const { error: updateBookingError } = await locals.supabase
@@ -593,8 +640,9 @@ export const actions: Actions = {
 
 		const { error: updateSlotError } = await locals.supabase
 			.from('available_slots')
-			.update({ status: 'cancelled' })
-			.eq('id', booking.slot_id);
+			.update({ status: 'open', booked_by: null, booked_at: null })
+			.eq('id', booking.slot_id)
+			.eq('status', 'booked');
 
 		if (updateSlotError) {
 			return fail(500, { message: updateSlotError.message });
@@ -602,7 +650,7 @@ export const actions: Actions = {
 
 		return {
 			success: true,
-			message: 'Booking cancelled and the linked slot marked cancelled.'
+			message: 'Booking cancelled and the linked slot reopened.'
 		};
 	}
 };
