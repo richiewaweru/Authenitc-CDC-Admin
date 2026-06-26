@@ -8,7 +8,7 @@
 
 	let { data, form } = $props();
 
-	let actionSubmitting = $state<'complete' | 'cancel' | null>(null);
+	let actionSubmitting = $state<'complete' | 'cancel' | 'grant' | null>(null);
 	let toastMessage = $state('');
 	let toastTone = $state<'success' | 'error'>('success');
 	let toastVisible = $state(false);
@@ -157,7 +157,7 @@
 		}
 	}
 
-	function actionEnhance(kind: 'complete' | 'cancel'): SubmitFunction {
+	function actionEnhance(kind: 'complete' | 'cancel' | 'grant'): SubmitFunction {
 		return () => {
 			actionSubmitting = kind;
 
@@ -678,11 +678,11 @@
 			<div class="space-y-4 rounded-[24px] border border-sand bg-background p-4">
 				<p class="section-eyebrow">Actions</p>
 
-				{#if data.selectedBooking.canMarkComplete}
-					<form method="POST" action="?/markComplete" use:enhance={actionEnhance('complete')} class="space-y-3">
+				{#if data.selectedBooking.status === 'confirmed'}
+					<form method="POST" action="?/completeBooking" use:enhance={actionEnhance('complete')} class="space-y-3">
 						<input type="hidden" name="bookingId" value={data.selectedBooking.id} />
 						<button type="submit" class="button-primary w-full" disabled={actionSubmitting === 'complete'}>
-							{actionSubmitting === 'complete' ? 'Saving...' : 'Mark Complete'}
+							{actionSubmitting === 'complete' ? 'Saving...' : 'Mark Conversation as Completed'}
 						</button>
 					</form>
 				{/if}
@@ -708,6 +708,31 @@
 							{actionSubmitting === 'cancel' ? 'Saving...' : 'Cancel Booking'}
 						</button>
 					</form>
+				{/if}
+
+				{#if data.selectedBooking.status === 'completed'}
+					<div class="rounded-2xl border border-[#C6A85E]/30 bg-[#C6A85E]/10 p-4">
+						{#if data.selectedBooking.memberUserState === 'community_active'}
+							<div class="flex items-center gap-2">
+								<span class="inline-block h-2 w-2 rounded-full bg-green-500"></span>
+								<p class="text-sm font-medium text-primary-dark">Community access granted</p>
+							</div>
+						{:else}
+							<p class="mb-3 text-sm text-on-surface-variant">
+								This conversation is complete. Grant community access to approve this member.
+							</p>
+							<form method="POST" action="?/grantCommunityAccess" use:enhance={actionEnhance('grant')}>
+								<input type="hidden" name="memberId" value={data.selectedBooking.memberId} />
+								<button
+									type="submit"
+									class="button-primary w-full text-sm"
+									disabled={actionSubmitting === 'grant'}
+								>
+									{actionSubmitting === 'grant' ? 'Saving...' : 'Grant Community Access'}
+								</button>
+							</form>
+						{/if}
+					</div>
 				{/if}
 			</div>
 		</div>

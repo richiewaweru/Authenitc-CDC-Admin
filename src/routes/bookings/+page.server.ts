@@ -19,6 +19,7 @@ type BookingListItem = {
 	memberId: string;
 	memberLabel: string;
 	memberEmail: string;
+	memberUserState: ProfileRow['user_state'];
 	guideId: string;
 	guideLabel: string;
 	guideTitle: string;
@@ -366,6 +367,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			memberId: booking.user_id,
 			memberLabel: getProfileLabel(member),
 			memberEmail: member?.email ?? 'unknown@authentic.app',
+			memberUserState: member?.user_state ?? null,
 			guideId: booking.guide_id,
 			guideLabel: getGuideLabel(guide),
 			guideTitle: guide?.title ?? 'Community Guide',
@@ -506,11 +508,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-	markComplete: async ({ locals, request }) => {
+	completeBooking: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);
+		const isStaff = role === 'admin' || role === 'moderator';
+		const isGuide = role === 'guide';
 
-		if (!role || !isStaffRole(role)) {
-			return fail(403, { message: 'Only staff can update bookings.' });
+		if (!isStaff && !isGuide) {
+			return fail(403, { message: 'Only staff can mark bookings as completed.' });
 		}
 
 		const formData = await request.formData();
@@ -540,11 +544,15 @@ export const actions: Actions = {
 			return fail(400, { message: 'Only confirmed bookings can be marked complete.' });
 		}
 
-		if (role === 'guide') {
+		if (isGuide) {
 			const { data: guideId, error: guideIdError } = await locals.supabase.rpc('get_my_guide_id');
 
-			if (guideIdError || !guideId || guideId !== booking.guide_id) {
-				return fail(403, { message: 'Guide sessions can only update assigned bookings.' });
+			if (guideIdError) {
+				return fail(500, { message: guideIdError.message });
+			}
+
+			if (!guideId || guideId !== booking.guide_id) {
+				return fail(403, { message: 'You can only complete your own bookings.' });
 			}
 		}
 
@@ -570,7 +578,50 @@ export const actions: Actions = {
 
 		return {
 			success: true,
-			message: 'Booking marked complete and the linked slot moved to completed.'
+			message: 'Booking marked as completed.'
+		};
+	},
+	grantCommunityAccess: async ({ locals, request }) => {
+		const role = await resolveAppRole(locals);
+
+		if (role !== 'admin' && role !== 'moderator') {
+			return fail(403, { message: 'Only admins and moderators can grant community access.' });
+		}
+
+		const formData = await request.formData();
+		const memberId = formData.get('memberId')?.toString().trim() ?? '';
+
+		if (!memberId) {
+			return fail(400, { message: 'Member ID is required.' });
+		}
+
+		const { data: member, error: memberError } = await locals.supabase
+			.from('profiles')
+			.select('id, user_state, display_name, email')
+			.eq('id', memberId)
+			.eq('role', 'member')
+			.single();
+
+		if (memberError || !member) {
+			return fail(404, { message: 'Member not found.' });
+		}
+
+		if (member.user_state === 'community_active') {
+			return fail(400, { message: 'This member already has community access.' });
+		}
+
+		const { error: updateError } = await locals.supabase
+			.from('profiles')
+			.update({ user_state: 'community_active' })
+			.eq('id', memberId);
+
+		if (updateError) {
+			return fail(500, { message: updateError.message });
+		}
+
+		return {
+			success: true,
+			message: `Community access granted to ${member.display_name ?? member.email}.`
 		};
 	},
 	cancelBooking: async ({ locals, request }) => {

@@ -350,8 +350,10 @@ export type UserState =
 	| 'authenticated'
 	| 'onboarding_incomplete'
 	| 'onboarding_complete'
+	| 'conversation_complete'
 	| 'conversation_scheduled'
 	| 'conversation_approved'
+	| 'community_active'
 	| 'membership_active'
 	| 'bylaws_accepted'
 	| 'full_member';
