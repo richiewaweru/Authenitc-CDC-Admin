@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 
+import { getHigherRole } from '$lib/server/roleHierarchy';
 import { resolveAppRole } from '$lib/server/roles';
 import { getSupabaseAdminClient } from '$lib/supabase-admin';
 import type { AppRole, Database } from '$lib/types';
@@ -242,10 +243,12 @@ async function createOrRefreshStaffAccess(params: {
 			throw new Error('Admin accounts cannot be reassigned from Team management.');
 		}
 
-		if (profile.role !== params.role) {
+		const nextRole = getHigherRole(profile.role, params.role);
+
+		if (profile.role !== nextRole) {
 			const { error: updateError } = await adminSupabase
 				.from('profiles')
-				.update({ role: params.role, updated_at: new Date().toISOString() })
+				.update({ role: nextRole, updated_at: new Date().toISOString() })
 				.eq('id', profile.id);
 
 			if (updateError) {
@@ -267,9 +270,9 @@ async function createOrRefreshStaffAccess(params: {
 			success: true,
 			alreadyRegistered: true,
 			message:
-				profile.role === params.role
-					? `${params.email} already has ${params.role} access.`
-					: `${params.email} now has ${params.role} access.`
+				profile.role === nextRole
+					? `${params.email} already has ${nextRole} access.`
+					: `${params.email} now has ${nextRole} access.`
 		};
 	}
 

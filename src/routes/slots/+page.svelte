@@ -450,14 +450,7 @@
 					<div class="rounded-[24px] border border-sand bg-background px-4 py-4">
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="space-y-2">
-								<div class="flex flex-wrap items-center gap-2">
-									<p class="text-sm font-semibold text-on-surface">{formatSlotDate(slot.slotDate)}</p>
-									{#if shouldShowGuideTag(slot)}
-										<span class="inline-block rounded-full bg-sand/60 px-2 py-0.5 text-xs text-on-surface-variant">
-											{slot.guideLabel}
-										</span>
-									{/if}
-								</div>
+								<p class="text-sm font-semibold text-on-surface">{formatSlotDate(slot.slotDate)}</p>
 								<p class="text-sm text-on-surface-variant">{slot.timeLabel}</p>
 								<div class="flex flex-wrap gap-2">
 									<span class={`badge ${statusToneClass(slot.statusTone)}`}>
@@ -559,12 +552,6 @@
 							</div>
 						{/if}
 
-						{#if slot.modifiedBy && slot.modifiedBy !== slot.createdBy && slot.modifiedByLabel}
-							<p class="mt-3 text-xs text-on-surface-variant">
-								Last modified by {slot.modifiedByLabel}
-							</p>
-						{/if}
-
 						<div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
 							<span>{slot.durationMinutes} min</span>
 							{#if canMutateSlot(slot)}
@@ -617,23 +604,12 @@
 								{:else}
 									<div class="space-y-3">
 										{#each cell.items as item}
-											<div
-												class={`rounded-[22px] border border-sand bg-background p-3 shadow-[0_8px_20px_rgba(8,39,23,0.06)] ${
-													!item.isOwnSlot ? 'border-b-[3px] border-b-primary/40' : ''
-												}`}
-											>
+											<div class="rounded-[22px] border border-sand bg-background p-3 shadow-[0_8px_20px_rgba(8,39,23,0.06)]">
 												<div class="flex items-start justify-between gap-2">
 													<p class="text-sm font-semibold text-on-surface">{item.timeLabel}</p>
-													<div class="flex items-center gap-2">
-														{#if !item.isOwnSlot}
-															<span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sand/60 text-[10px] font-semibold text-on-surface-variant">
-																{item.guideInitials}
-															</span>
-														{/if}
-														<span class={`badge ${statusToneClass(item.statusTone)}`}>
-															{statusLabel(item.status)}
-														</span>
-													</div>
+													<span class={`badge ${statusToneClass(item.statusTone)}`}>
+														{statusLabel(item.status)}
+													</span>
 												</div>
 												<div class="mt-3 space-y-1 text-xs leading-6 text-on-surface-variant">
 													{#if showGuideNames()}
@@ -697,14 +673,7 @@
 					<div class="rounded-[24px] border border-sand bg-background px-4 py-4">
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="space-y-2">
-								<div class="flex flex-wrap items-center gap-2">
-									<p class="text-sm font-semibold text-on-surface">{formatSlotDate(slot.slotDate)}</p>
-									{#if shouldShowGuideTag(slot)}
-										<span class="inline-block rounded-full bg-sand/60 px-2 py-0.5 text-xs text-on-surface-variant">
-											{slot.guideLabel}
-										</span>
-									{/if}
-								</div>
+								<p class="text-sm font-semibold text-on-surface">{formatSlotDate(slot.slotDate)}</p>
 								<p class="text-sm text-on-surface-variant">{slot.timeLabel}</p>
 								<div class="flex flex-wrap gap-2">
 									<span class={`badge ${statusToneClass(slot.statusTone)}`}>
@@ -806,12 +775,6 @@
 							</div>
 						{/if}
 
-						{#if slot.modifiedBy && slot.modifiedBy !== slot.createdBy && slot.modifiedByLabel}
-							<p class="mt-3 text-xs text-on-surface-variant">
-								Last modified by {slot.modifiedByLabel}
-							</p>
-						{/if}
-
 						<div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
 							<span>{slot.durationMinutes} min</span>
 							{#if canMutateSlot(slot)}
@@ -872,25 +835,13 @@
 						{#each data.listSlots as slot}
 							<tr class="align-top">
 								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface">
-									<div class="flex flex-wrap items-center gap-2">
-										<span>{formatSlotDate(slot.slotDate)}</span>
-										{#if shouldShowGuideTag(slot)}
-											<span class="inline-block rounded-full bg-sand/60 px-2 py-0.5 text-xs text-on-surface-variant">
-												{slot.guideLabel}
-											</span>
-										{/if}
-									</div>
+									{formatSlotDate(slot.slotDate)}
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface">
 									{slot.timeLabel}
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface-variant">
-									<div class="space-y-1">
-										<p>{slot.guideLabel}</p>
-										{#if slot.modifiedBy && slot.modifiedBy !== slot.createdBy && slot.modifiedByLabel}
-											<p class="text-xs">Last modified by {slot.modifiedByLabel}</p>
-										{/if}
-									</div>
+									{slot.guideLabel}
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface-variant">
 									{slot.memberLabel}
@@ -1019,32 +970,6 @@
 	</div>
 </section>
 
-{#if crossGuideConfirm}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="fixed inset-0 z-40 bg-primary-dark/40 backdrop-blur-sm"
-		onclick={cancelCrossGuideConfirm}
-		onkeydown={(event) => event.key === 'Escape' && cancelCrossGuideConfirm()}
-	></div>
-
-	<div class="fixed inset-x-4 top-1/2 z-50 mx-auto w-full max-w-md -translate-y-1/2 rounded-[28px] border border-sand bg-surface p-6 shadow-[0_24px_80px_rgba(8,39,23,0.24)]">
-		<p class="section-eyebrow">Confirm action</p>
-		<h2 class="mt-2 text-xl font-semibold text-on-surface">Editing another guide&apos;s slot</h2>
-		<p class="mt-3 text-sm leading-7 text-on-surface-variant">
-			You are about to {describeCrossGuideAction(crossGuideConfirm.action)} a slot belonging to
-			<span class="font-semibold text-on-surface">{crossGuideConfirm.guideLabel}</span>. Continue?
-		</p>
-		<div class="mt-6 flex justify-end gap-3">
-			<button type="button" class="button-secondary" onclick={cancelCrossGuideConfirm}>
-				Go Back
-			</button>
-			<button type="button" class="button-primary" onclick={proceedCrossGuideConfirm}>
-				Yes, Continue
-			</button>
-		</div>
-	</div>
-{/if}
-
 {#if publishModalOpen}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
@@ -1074,56 +999,17 @@
 			use:enhance={publishEnhance}
 		>
 			{#if data.role === 'admin' || data.role === 'moderator'}
-				{#if !data.myGuideId}
-					<div class="rounded-[24px] border border-red-200 bg-error/40 px-4 py-4 text-sm text-error-strong">
-						You need a guide profile to publish slots. Ask an admin to create one from the Team page.
-					</div>
-				{:else}
-					<input type="hidden" name="guideId" value={resolvePublishGuideId()} />
-					<div class="rounded-[24px] border border-sand bg-background px-4 py-4 text-sm text-on-surface-variant">
-						Slots will be published under your guide profile,
-						<span class="font-semibold text-on-surface">{ownGuide?.label ?? 'your profile'}</span>.
-					</div>
-					<button
-						type="button"
-						class="text-left text-xs text-on-surface-variant underline"
-						onclick={() => {
-							publishForOther = !publishForOther;
-							publishGuideId = publishForOther ? (otherGuides[0]?.id ?? '') : '';
-						}}
-					>
-						{publishForOther ? 'Publish for myself' : 'Publish for another guide'}
-					</button>
-
-					{#if publishForOther}
-						<div class="rounded-[24px] border border-amber-200 bg-[#FFF4D6] px-4 py-4 text-sm text-[#6A4B00]">
-							You are publishing slots on behalf of another guide.
-						</div>
-
-						<div class="space-y-2">
-							<label class="text-sm font-semibold text-on-surface" for="guideId">Guide</label>
-							<select
-								id="guideId"
-								class="input-base"
-								bind:value={publishGuideId}
-								required={publishForOther}
-								disabled={otherGuides.length === 0}
-							>
-								<option value="" disabled>Select a guide</option>
-								{#each otherGuides as guide}
-									<option value={guide.id}>{guide.label}</option>
-								{/each}
-							</select>
-							{#if otherGuides.length === 0}
-								<p class="text-xs text-on-surface-variant">
-									No other guide profiles are available right now.
-								</p>
-							{/if}
-						</div>
-					{/if}
-				{/if}
+				<div class="space-y-2">
+					<label class="text-sm font-semibold text-on-surface" for="guideId">Guide</label>
+					<select id="guideId" name="guideId" class="input-base" bind:value={publishGuideId} required>
+						<option value="" disabled>Select a guide</option>
+						{#each data.guides as guide}
+							<option value={guide.id}>{guide.label}</option>
+						{/each}
+					</select>
+				</div>
 			{:else}
-				<input type="hidden" name="guideId" value={data.myGuideId ?? data.guides[0]?.id ?? ''} />
+				<input type="hidden" name="guideId" value={data.guides[0]?.id ?? ''} />
 				<div class="rounded-[24px] border border-sand bg-background px-4 py-4 text-sm text-on-surface-variant">
 					{#if data.guides[0]}
 						Slots will be published under your guide profile,
@@ -1248,7 +1134,7 @@
 				<button
 					type="submit"
 					class="button-primary"
-					disabled={publishSubmitting || !resolvePublishGuideId()}
+					disabled={publishSubmitting || (data.role === 'guide' && !data.guides[0])}
 				>
 					{publishSubmitting ? 'Publishing...' : 'Publish slots'}
 				</button>

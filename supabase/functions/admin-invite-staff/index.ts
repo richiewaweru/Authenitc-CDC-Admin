@@ -20,6 +20,15 @@ type InviteLinkResult = {
 	userId: string;
 };
 
+type AppRole = 'admin' | 'moderator' | 'guide' | 'member';
+
+const ROLE_RANK: Record<AppRole, number> = {
+	member: 0,
+	guide: 1,
+	moderator: 2,
+	admin: 3
+};
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
 	return new Response(JSON.stringify(body), {
 		status,
@@ -39,6 +48,14 @@ function getRequiredEnv(name: string): string {
 function getInviteRedirectUrl(): string {
 	const adminAppUrl = getRequiredEnv('ADMIN_APP_URL');
 	return new URL('/auth/callback', `${adminAppUrl.replace(/\/+$/, '')}/`).toString();
+}
+
+function getHigherRole(currentRole: AppRole | null | undefined, requestedRole: 'moderator' | 'guide') {
+	if (!currentRole) {
+		return requestedRole;
+	}
+
+	return ROLE_RANK[currentRole] >= ROLE_RANK[requestedRole] ? currentRole : requestedRole;
 }
 
 async function syncGuideProfile(
@@ -153,9 +170,21 @@ async function finalizeStaffInvite(
 		};
 	}
 
+	const { data: existingProfile, error: existingProfileError } = await adminClient
+		.from('profiles')
+		.select('role')
+		.eq('id', caller.id)
+		.maybeSingle();
+
+	if (existingProfileError) {
+		throw existingProfileError;
+	}
+
+	const nextRole = getHigherRole(existingProfile?.role as AppRole | null | undefined, resolvedRole);
+
 	const { error: profileError } = await adminClient
 		.from('profiles')
-		.update({ role: resolvedRole })
+		.update({ role: nextRole })
 		.eq('id', caller.id);
 
 	if (profileError) {
@@ -195,8 +224,8 @@ async function finalizeStaffInvite(
 
 	return {
 		success: true,
-		appliedRole: resolvedRole,
-		message: `Staff role finalized as ${resolvedRole}.`
+		appliedRole: nextRole,
+		message: `Staff role finalized as ${nextRole}.`
 	};
 }
 
@@ -393,7 +422,27 @@ Deno.serve(async (req: Request) => {
 		const existingUser = existingUsers?.find((user) => user.email === email);
 
 		if (existingUser) {
-			await adminClient.from('profiles').update({ role }).eq('id', existingUser.id);
+			const { data: existingProfile, error: existingProfileError } = await adminClient
+				.from('profiles')
+				.select('role')
+				.eq('id', existingUser.id)
+				.maybeSingle();
+
+			if (existingProfileError) {
+				console.error('Failed to load existing profile role:', existingProfileError);
+				return jsonResponse({ error: 'Failed to check the existing account role.' }, 500);
+			}
+
+			const nextRole = getHigherRole(existingProfile?.role as AppRole | null | undefined, role);
+			const { error: updateError } = await adminClient
+				.from('profiles')
+				.update({ role: nextRole })
+				.eq('id', existingUser.id);
+
+			if (updateError) {
+				console.error('Failed to update existing profile role:', updateError);
+				return jsonResponse({ error: 'Failed to update the existing account role.' }, 500);
+			}
 
 			if (role === 'guide') {
 				await syncGuideProfile(adminClient, {
@@ -407,7 +456,10 @@ Deno.serve(async (req: Request) => {
 
 			return jsonResponse({
 				success: true,
-				message: `${email} already registered. Role updated to ${role}.`,
+				message:
+					nextRole === role
+						? `${email} already registered. Role updated to ${nextRole}.`
+						: `${email} already registered. Existing higher role ${nextRole} was preserved.`,
 				alreadyRegistered: true
 			});
 		}

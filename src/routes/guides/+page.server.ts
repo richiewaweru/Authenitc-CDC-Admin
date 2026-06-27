@@ -1,6 +1,7 @@
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { fail, redirect } from '@sveltejs/kit';
 
+import { shouldDemoteGuideProfileRemoval } from '$lib/server/roleHierarchy';
 import { resolveAppRole } from '$lib/server/roles';
 import type { Actions, PageServerLoad } from './$types';
 import type { Database, StaffRole } from '$lib/types';
@@ -521,15 +522,29 @@ export const actions: Actions = {
 		}
 
 		if (guide.user_id) {
-			const { error: roleError } = await locals.supabase
+			const { data: linkedProfile, error: profileError } = await locals.supabase
 				.from('profiles')
-				.update({ role: 'member' })
-				.eq('id', guide.user_id);
+				.select('role')
+				.eq('id', guide.user_id)
+				.maybeSingle();
 
-			if (roleError) {
+			if (profileError) {
 				return fail(500, {
-					message: `Guide profile was deleted, but demoting the linked staff role failed: ${roleError.message}`
+					message: `Guide profile was deleted, but the linked account role could not be checked: ${profileError.message}`
 				});
+			}
+
+			if (shouldDemoteGuideProfileRemoval(linkedProfile?.role)) {
+				const { error: roleError } = await locals.supabase
+					.from('profiles')
+					.update({ role: 'member' })
+					.eq('id', guide.user_id);
+
+				if (roleError) {
+					return fail(500, {
+						message: `Guide profile was deleted, but demoting the linked staff role failed: ${roleError.message}`
+					});
+				}
 			}
 		}
 
