@@ -128,3 +128,10 @@
 - Decision: Close Milestone 10 with a repeatable `scripts/final-review.mjs` harness that seeds disposable staff/member data, exercises authenticated app routes with real Supabase SSR cookies, verifies key cross-role actions, and then cleans everything up.
 - Why: The final review needed concrete proof for both admin and guide walkthroughs without disturbing the existing browser session or relying on manual dashboard setup each time. A disposable harness makes the handoff evidence repeatable and keeps the live project clean after verification.
 - Docs said: The last milestone should verify admin and guide smoke tests, CRUD behavior, and RLS sanity before the project is considered complete.
+
+## 2026-06-27
+
+### Consumer slot service verification scope
+- Decision: Complete the admin-panel slot ownership changes in this workspace and record the consumer-app verification as blocked by missing source files here, instead of inventing or patching a consumer service path that does not exist locally.
+- Why: The goal spec references `src/services/slotService.ts` for the consumer app, but this repository only contains the admin app and no matching consumer service or `ChooseSlot` implementation to inspect.
+- Docs said: Verify `fetchGuidesFromSupabase()` and `fetchSlotsFromSupabase()` in the consumer app and remove any role filter if present.

@@ -122,6 +122,7 @@ export type Database = {
 					booked_at: string | null;
 					created_at: string | null;
 					created_by: string | null;
+					modified_by: string | null;
 				};
 				Insert: {
 					id?: string;
@@ -135,6 +136,7 @@ export type Database = {
 					booked_at?: string | null;
 					created_at?: string | null;
 					created_by?: string | null;
+					modified_by?: string | null;
 				};
 				Update: {
 					guide_id?: string;
@@ -147,6 +149,7 @@ export type Database = {
 					booked_at?: string | null;
 					created_at?: string | null;
 					created_by?: string | null;
+					modified_by?: string | null;
 				};
 				Relationships: [];
 			};

@@ -4,6 +4,7 @@
 
 	type CalendarRow = (typeof data.calendarRows)[number];
 	type ListSlot = (typeof data.listSlots)[number];
+	type CrossGuideAction = 'cancel' | 'reopen' | 'delete' | 'update';
 
 	let { data, form } = $props();
 
@@ -15,13 +16,24 @@
 	let toastTone = $state<'success' | 'error'>('success');
 	let toastVisible = $state(false);
 	let publishGuideId = $state('');
+	let publishForOther = $state(false);
 	let publishStartDate = $state('');
 	let publishEndDate = $state('');
 	let publishDuration = $state('30');
 	let selectedTimes = $state<string[]>([]);
 	let customTime = $state('');
 	let excludeWeekends = $state(true);
+	let crossGuideConfirm = $state<{
+		action: CrossGuideAction;
+		slotId: string;
+		guideLabel: string;
+		formData: FormData;
+		submit: () => void;
+	} | null>(null);
+	let confirmedCrossGuideActionKey = $state<string | null>(null);
 	let guidePublishUnavailable = $derived(Boolean(data.publishDisabledReason));
+	let ownGuide = $derived(data.guides.find((guide) => guide.id === data.myGuideId) ?? null);
+	let otherGuides = $derived(data.guides.filter((guide) => guide.id !== data.myGuideId));
 
 	function buildHref(week: string, view = data.filters.view, guide = data.filters.guide) {
 		const params = new URLSearchParams();
@@ -32,6 +44,13 @@
 			params.set('guide', guide);
 		}
 
+		return `/slots?${params.toString()}`;
+	}
+
+	function buildResetHref() {
+		const params = new URLSearchParams();
+		params.set('week', data.week.start);
+		params.set('view', data.filters.view);
 		return `/slots?${params.toString()}`;
 	}
 
@@ -68,8 +87,34 @@
 		return data.role !== 'guide' && data.filters.guide === 'all';
 	}
 
+	function shouldShowGuideTag(slot: ListSlot) {
+		return !slot.isOwnSlot && data.filters.guide !== data.myGuideId;
+	}
+
+	function buildCrossGuideActionKey(slotId: string, loadingLabel: string) {
+		return `${slotId}:${loadingLabel}`;
+	}
+
+	function describeCrossGuideAction(action: CrossGuideAction) {
+		switch (action) {
+			case 'cancel':
+				return 'cancel';
+			case 'reopen':
+				return 'reopen';
+			case 'delete':
+				return 'delete';
+			default:
+				return 'update';
+		}
+	}
+
+	function resolvePublishGuideId() {
+		return publishForOther ? publishGuideId : (data.myGuideId ?? '');
+	}
+
 	function resetPublishForm() {
-		publishGuideId = data.guides[0]?.id ?? '';
+		publishForOther = false;
+		publishGuideId = otherGuides[0]?.id ?? '';
 		publishStartDate = data.week.start;
 		publishEndDate = data.week.end;
 		publishDuration = '30';
@@ -91,6 +136,7 @@
 	function closePublishModal() {
 		publishModalOpen = false;
 		publishError = '';
+		publishForOther = false;
 	}
 
 	function canMutateSlot(slot: ListSlot) {
@@ -162,12 +208,50 @@
 		};
 	};
 
-	function slotActionEnhance(slotId: string, loadingLabel: string): SubmitFunction {
-		return () => {
-			slotActionSubmitting = `${slotId}:${loadingLabel}`;
+	function cancelCrossGuideConfirm() {
+		crossGuideConfirm = null;
+		confirmedCrossGuideActionKey = null;
+	}
+
+	function proceedCrossGuideConfirm() {
+		crossGuideConfirm?.submit();
+	}
+
+	function slotActionEnhance(
+		slot: ListSlot,
+		loadingLabel: string,
+		confirmAction?: CrossGuideAction
+	): SubmitFunction {
+		return ({ formData, formElement, cancel, submitter }) => {
+			const actionKey = buildCrossGuideActionKey(slot.id, loadingLabel);
+
+			if (confirmAction && !slot.isOwnSlot && confirmedCrossGuideActionKey !== actionKey) {
+				cancel();
+				const submitButton =
+					submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
+						? submitter
+						: undefined;
+				crossGuideConfirm = {
+					action: confirmAction,
+					slotId: slot.id,
+					guideLabel: slot.guideLabel,
+					formData,
+					submit: () => {
+						confirmedCrossGuideActionKey = actionKey;
+						crossGuideConfirm = null;
+						formElement.requestSubmit(submitButton);
+					}
+				};
+				return;
+			}
+
+			slotActionSubmitting = actionKey;
 
 			return async ({ result, update }) => {
 				slotActionSubmitting = null;
+				if (confirmedCrossGuideActionKey === actionKey) {
+					confirmedCrossGuideActionKey = null;
+				}
 
 				if (result.type === 'success') {
 					await update();
@@ -307,7 +391,7 @@
 
 				<div class="flex gap-3 pt-0 md:pt-6">
 					<button type="submit" class="button-primary">Apply</button>
-					<a href={buildHref(data.week.start, data.filters.view, 'all')} class="button-secondary">Reset</a>
+					<a href={buildResetHref()} class="button-secondary">Reset</a>
 				</div>
 			</form>
 
@@ -366,7 +450,14 @@
 					<div class="rounded-[24px] border border-sand bg-background px-4 py-4">
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="space-y-2">
-								<p class="text-sm font-semibold text-on-surface">{formatSlotDate(slot.slotDate)}</p>
+								<div class="flex flex-wrap items-center gap-2">
+									<p class="text-sm font-semibold text-on-surface">{formatSlotDate(slot.slotDate)}</p>
+									{#if shouldShowGuideTag(slot)}
+										<span class="inline-block rounded-full bg-sand/60 px-2 py-0.5 text-xs text-on-surface-variant">
+											{slot.guideLabel}
+										</span>
+									{/if}
+								</div>
 								<p class="text-sm text-on-surface-variant">{slot.timeLabel}</p>
 								<div class="flex flex-wrap gap-2">
 									<span class={`badge ${statusToneClass(slot.statusTone)}`}>
@@ -386,7 +477,7 @@
 										<form
 											method="POST"
 											action="?/updateSlotStatus"
-											use:enhance={slotActionEnhance(slot.id, 'cancel')}
+											use:enhance={slotActionEnhance(slot, 'cancel', 'cancel')}
 										>
 											<input type="hidden" name="slotId" value={slot.id} />
 											<input type="hidden" name="status" value="cancelled" />
@@ -402,7 +493,7 @@
 										<form
 											method="POST"
 											action="?/updateSlotStatus"
-											use:enhance={slotActionEnhance(slot.id, 'reopen')}
+											use:enhance={slotActionEnhance(slot, 'reopen', 'reopen')}
 										>
 											<input type="hidden" name="slotId" value={slot.id} />
 											<input type="hidden" name="status" value="open" />
@@ -436,7 +527,7 @@
 								<form
 									method="POST"
 									action="?/updateMeetingLink"
-									use:enhance={slotActionEnhance(slot.id, 'meeting-link')}
+									use:enhance={slotActionEnhance(slot, 'meeting-link', 'update')}
 									class="flex gap-2"
 								>
 									<input type="hidden" name="bookingId" value={slot.bookingId ?? ''} />
@@ -468,6 +559,12 @@
 							</div>
 						{/if}
 
+						{#if slot.modifiedBy && slot.modifiedBy !== slot.createdBy && slot.modifiedByLabel}
+							<p class="mt-3 text-xs text-on-surface-variant">
+								Last modified by {slot.modifiedByLabel}
+							</p>
+						{/if}
+
 						<div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
 							<span>{slot.durationMinutes} min</span>
 							{#if canMutateSlot(slot)}
@@ -475,7 +572,7 @@
 								<form
 									method="POST"
 									action="?/deleteSlot"
-									use:enhance={slotActionEnhance(slot.id, 'remove')}
+									use:enhance={slotActionEnhance(slot, 'remove', 'delete')}
 								>
 									<input type="hidden" name="slotId" value={slot.id} />
 									<button
@@ -520,12 +617,23 @@
 								{:else}
 									<div class="space-y-3">
 										{#each cell.items as item}
-											<div class="rounded-[22px] border border-sand bg-background p-3 shadow-[0_8px_20px_rgba(8,39,23,0.06)]">
+											<div
+												class={`rounded-[22px] border border-sand bg-background p-3 shadow-[0_8px_20px_rgba(8,39,23,0.06)] ${
+													!item.isOwnSlot ? 'border-b-[3px] border-b-primary/40' : ''
+												}`}
+											>
 												<div class="flex items-start justify-between gap-2">
 													<p class="text-sm font-semibold text-on-surface">{item.timeLabel}</p>
-													<span class={`badge ${statusToneClass(item.statusTone)}`}>
-														{statusLabel(item.status)}
-													</span>
+													<div class="flex items-center gap-2">
+														{#if !item.isOwnSlot}
+															<span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sand/60 text-[10px] font-semibold text-on-surface-variant">
+																{item.guideInitials}
+															</span>
+														{/if}
+														<span class={`badge ${statusToneClass(item.statusTone)}`}>
+															{statusLabel(item.status)}
+														</span>
+													</div>
 												</div>
 												<div class="mt-3 space-y-1 text-xs leading-6 text-on-surface-variant">
 													{#if showGuideNames()}
@@ -543,7 +651,7 @@
 														<form
 															method="POST"
 															action="?/updateMeetingLink"
-															use:enhance={slotActionEnhance(item.id, 'meeting-link')}
+															use:enhance={slotActionEnhance(item, 'meeting-link', 'update')}
 															class="space-y-2"
 														>
 															<input type="hidden" name="bookingId" value={item.bookingId ?? ''} />
@@ -589,7 +697,14 @@
 					<div class="rounded-[24px] border border-sand bg-background px-4 py-4">
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="space-y-2">
-								<p class="text-sm font-semibold text-on-surface">{formatSlotDate(slot.slotDate)}</p>
+								<div class="flex flex-wrap items-center gap-2">
+									<p class="text-sm font-semibold text-on-surface">{formatSlotDate(slot.slotDate)}</p>
+									{#if shouldShowGuideTag(slot)}
+										<span class="inline-block rounded-full bg-sand/60 px-2 py-0.5 text-xs text-on-surface-variant">
+											{slot.guideLabel}
+										</span>
+									{/if}
+								</div>
 								<p class="text-sm text-on-surface-variant">{slot.timeLabel}</p>
 								<div class="flex flex-wrap gap-2">
 									<span class={`badge ${statusToneClass(slot.statusTone)}`}>
@@ -609,7 +724,7 @@
 										<form
 											method="POST"
 											action="?/updateSlotStatus"
-											use:enhance={slotActionEnhance(slot.id, 'cancel')}
+											use:enhance={slotActionEnhance(slot, 'cancel', 'cancel')}
 										>
 											<input type="hidden" name="slotId" value={slot.id} />
 											<input type="hidden" name="status" value="cancelled" />
@@ -625,7 +740,7 @@
 										<form
 											method="POST"
 											action="?/updateSlotStatus"
-											use:enhance={slotActionEnhance(slot.id, 'reopen')}
+											use:enhance={slotActionEnhance(slot, 'reopen', 'reopen')}
 										>
 											<input type="hidden" name="slotId" value={slot.id} />
 											<input type="hidden" name="status" value="open" />
@@ -659,7 +774,7 @@
 								<form
 									method="POST"
 									action="?/updateMeetingLink"
-									use:enhance={slotActionEnhance(slot.id, 'meeting-link')}
+									use:enhance={slotActionEnhance(slot, 'meeting-link', 'update')}
 									class="flex gap-2"
 								>
 									<input type="hidden" name="bookingId" value={slot.bookingId ?? ''} />
@@ -691,6 +806,12 @@
 							</div>
 						{/if}
 
+						{#if slot.modifiedBy && slot.modifiedBy !== slot.createdBy && slot.modifiedByLabel}
+							<p class="mt-3 text-xs text-on-surface-variant">
+								Last modified by {slot.modifiedByLabel}
+							</p>
+						{/if}
+
 						<div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
 							<span>{slot.durationMinutes} min</span>
 							{#if canMutateSlot(slot)}
@@ -698,7 +819,7 @@
 								<form
 									method="POST"
 									action="?/deleteSlot"
-									use:enhance={slotActionEnhance(slot.id, 'remove')}
+									use:enhance={slotActionEnhance(slot, 'remove', 'delete')}
 								>
 									<input type="hidden" name="slotId" value={slot.id} />
 									<button
@@ -751,13 +872,25 @@
 						{#each data.listSlots as slot}
 							<tr class="align-top">
 								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface">
-									{formatSlotDate(slot.slotDate)}
+									<div class="flex flex-wrap items-center gap-2">
+										<span>{formatSlotDate(slot.slotDate)}</span>
+										{#if shouldShowGuideTag(slot)}
+											<span class="inline-block rounded-full bg-sand/60 px-2 py-0.5 text-xs text-on-surface-variant">
+												{slot.guideLabel}
+											</span>
+										{/if}
+									</div>
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface">
 									{slot.timeLabel}
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface-variant">
-									{slot.guideLabel}
+									<div class="space-y-1">
+										<p>{slot.guideLabel}</p>
+										{#if slot.modifiedBy && slot.modifiedBy !== slot.createdBy && slot.modifiedByLabel}
+											<p class="text-xs">Last modified by {slot.modifiedByLabel}</p>
+										{/if}
+									</div>
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4 text-sm text-on-surface-variant">
 									{slot.memberLabel}
@@ -771,7 +904,7 @@
 											<form
 												method="POST"
 												action="?/updateMeetingLink"
-												use:enhance={slotActionEnhance(slot.id, 'meeting-link')}
+												use:enhance={slotActionEnhance(slot, 'meeting-link', 'update')}
 												class="flex gap-2"
 											>
 												<input type="hidden" name="bookingId" value={slot.bookingId ?? ''} />
@@ -828,7 +961,7 @@
 												<form
 													method="POST"
 													action="?/updateSlotStatus"
-													use:enhance={slotActionEnhance(slot.id, 'cancel')}
+													use:enhance={slotActionEnhance(slot, 'cancel', 'cancel')}
 												>
 													<input type="hidden" name="slotId" value={slot.id} />
 													<input type="hidden" name="status" value="cancelled" />
@@ -844,7 +977,7 @@
 												<form
 													method="POST"
 													action="?/updateSlotStatus"
-													use:enhance={slotActionEnhance(slot.id, 'reopen')}
+													use:enhance={slotActionEnhance(slot, 'reopen', 'reopen')}
 												>
 													<input type="hidden" name="slotId" value={slot.id} />
 													<input type="hidden" name="status" value="open" />
@@ -862,7 +995,7 @@
 												<form
 													method="POST"
 													action="?/deleteSlot"
-													use:enhance={slotActionEnhance(slot.id, 'remove')}
+													use:enhance={slotActionEnhance(slot, 'remove', 'delete')}
 												>
 													<input type="hidden" name="slotId" value={slot.id} />
 													<button
@@ -885,6 +1018,32 @@
 		{/if}
 	</div>
 </section>
+
+{#if crossGuideConfirm}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="fixed inset-0 z-40 bg-primary-dark/40 backdrop-blur-sm"
+		onclick={cancelCrossGuideConfirm}
+		onkeydown={(event) => event.key === 'Escape' && cancelCrossGuideConfirm()}
+	></div>
+
+	<div class="fixed inset-x-4 top-1/2 z-50 mx-auto w-full max-w-md -translate-y-1/2 rounded-[28px] border border-sand bg-surface p-6 shadow-[0_24px_80px_rgba(8,39,23,0.24)]">
+		<p class="section-eyebrow">Confirm action</p>
+		<h2 class="mt-2 text-xl font-semibold text-on-surface">Editing another guide&apos;s slot</h2>
+		<p class="mt-3 text-sm leading-7 text-on-surface-variant">
+			You are about to {describeCrossGuideAction(crossGuideConfirm.action)} a slot belonging to
+			<span class="font-semibold text-on-surface">{crossGuideConfirm.guideLabel}</span>. Continue?
+		</p>
+		<div class="mt-6 flex justify-end gap-3">
+			<button type="button" class="button-secondary" onclick={cancelCrossGuideConfirm}>
+				Go Back
+			</button>
+			<button type="button" class="button-primary" onclick={proceedCrossGuideConfirm}>
+				Yes, Continue
+			</button>
+		</div>
+	</div>
+{/if}
 
 {#if publishModalOpen}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -915,17 +1074,56 @@
 			use:enhance={publishEnhance}
 		>
 			{#if data.role === 'admin' || data.role === 'moderator'}
-				<div class="space-y-2">
-					<label class="text-sm font-semibold text-on-surface" for="guideId">Guide</label>
-					<select id="guideId" name="guideId" class="input-base" bind:value={publishGuideId} required>
-						<option value="" disabled>Select a guide</option>
-						{#each data.guides as guide}
-							<option value={guide.id}>{guide.label}</option>
-						{/each}
-					</select>
-				</div>
+				{#if !data.myGuideId}
+					<div class="rounded-[24px] border border-red-200 bg-error/40 px-4 py-4 text-sm text-error-strong">
+						You need a guide profile to publish slots. Ask an admin to create one from the Team page.
+					</div>
+				{:else}
+					<input type="hidden" name="guideId" value={resolvePublishGuideId()} />
+					<div class="rounded-[24px] border border-sand bg-background px-4 py-4 text-sm text-on-surface-variant">
+						Slots will be published under your guide profile,
+						<span class="font-semibold text-on-surface">{ownGuide?.label ?? 'your profile'}</span>.
+					</div>
+					<button
+						type="button"
+						class="text-left text-xs text-on-surface-variant underline"
+						onclick={() => {
+							publishForOther = !publishForOther;
+							publishGuideId = publishForOther ? (otherGuides[0]?.id ?? '') : '';
+						}}
+					>
+						{publishForOther ? 'Publish for myself' : 'Publish for another guide'}
+					</button>
+
+					{#if publishForOther}
+						<div class="rounded-[24px] border border-amber-200 bg-[#FFF4D6] px-4 py-4 text-sm text-[#6A4B00]">
+							You are publishing slots on behalf of another guide.
+						</div>
+
+						<div class="space-y-2">
+							<label class="text-sm font-semibold text-on-surface" for="guideId">Guide</label>
+							<select
+								id="guideId"
+								class="input-base"
+								bind:value={publishGuideId}
+								required={publishForOther}
+								disabled={otherGuides.length === 0}
+							>
+								<option value="" disabled>Select a guide</option>
+								{#each otherGuides as guide}
+									<option value={guide.id}>{guide.label}</option>
+								{/each}
+							</select>
+							{#if otherGuides.length === 0}
+								<p class="text-xs text-on-surface-variant">
+									No other guide profiles are available right now.
+								</p>
+							{/if}
+						</div>
+					{/if}
+				{/if}
 			{:else}
-				<input type="hidden" name="guideId" value={data.guides[0]?.id ?? ''} />
+				<input type="hidden" name="guideId" value={data.myGuideId ?? data.guides[0]?.id ?? ''} />
 				<div class="rounded-[24px] border border-sand bg-background px-4 py-4 text-sm text-on-surface-variant">
 					{#if data.guides[0]}
 						Slots will be published under your guide profile,
@@ -1050,7 +1248,7 @@
 				<button
 					type="submit"
 					class="button-primary"
-					disabled={publishSubmitting || (data.role === 'guide' && !data.guides[0])}
+					disabled={publishSubmitting || !resolvePublishGuideId()}
 				>
 					{publishSubmitting ? 'Publishing...' : 'Publish slots'}
 				</button>

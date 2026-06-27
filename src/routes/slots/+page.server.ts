@@ -114,6 +114,22 @@ function getGuideLabel(guide?: Pick<GuideRow, 'display_name' | 'name' | 'email'>
 	return 'Unknown guide';
 }
 
+function getGuideInitials(guide?: Pick<GuideRow, 'initials' | 'display_name' | 'name' | 'email'> | null) {
+	if (guide?.initials?.trim()) {
+		return guide.initials.trim().slice(0, 2).toUpperCase();
+	}
+
+	const label = getGuideLabel(guide);
+	const initials = label
+		.split(/\s+/)
+		.map((part) => part.charAt(0))
+		.join('')
+		.slice(0, 2)
+		.toUpperCase();
+
+	return initials || 'G';
+}
+
 function getMemberLabel(profile?: Pick<ProfileRow, 'display_name' | 'email'> | null) {
 	if (profile?.display_name?.trim()) {
 		return profile.display_name.trim();
@@ -124,6 +140,18 @@ function getMemberLabel(profile?: Pick<ProfileRow, 'display_name' | 'email'> | n
 	}
 
 	return 'Unassigned member';
+}
+
+function getProfileLabel(profile?: Pick<ProfileRow, 'display_name' | 'email'> | null) {
+	if (profile?.display_name?.trim()) {
+		return profile.display_name.trim();
+	}
+
+	if (profile?.email) {
+		return profile.email.split('@')[0];
+	}
+
+	return 'Unknown staff member';
 }
 
 function buildSlotTone(status: SlotStatus | null) {
@@ -177,21 +205,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const weekStart = startOfWeek(requestedWeek ?? new Date());
 	const weekEnd = endOfWorkWeek(weekStart);
 	const guideFilter = normalizeGuideFilter(url.searchParams.get('guide'));
+	const hasGuideFilter = url.searchParams.has('guide');
 	const issues: string[] = [];
 
-	let guideId: string | null = null;
+	let myGuideId: string | null = null;
 
-	if (role === 'guide') {
-		const { data, error } = await locals.supabase.rpc('get_my_guide_id');
+	if (role === 'guide' || role === 'admin' || role === 'moderator') {
+		const { guideId, error } = await getMyGuideId(locals);
 
 		if (error) {
-			issues.push(error.message);
+			issues.push(error);
 		} else {
-			guideId = data;
+			myGuideId = guideId;
 		}
 	}
 
-	const scopedGuideId = role === 'guide' ? guideId ?? EMPTY_GUIDE_ID : null;
+	const scopedGuideId = role === 'guide' ? myGuideId ?? EMPTY_GUIDE_ID : null;
 
 	const guidesQuery =
 		role === 'guide'
@@ -223,12 +252,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}));
 
 	const activeGuideFilter =
-		role === 'guide' ? scopedGuideId ?? 'all' : guideFilter !== 'all' ? guideFilter : 'all';
+		role === 'guide'
+			? scopedGuideId ?? 'all'
+			: !hasGuideFilter && myGuideId
+				? myGuideId
+				: guideFilter !== 'all'
+					? guideFilter
+					: 'all';
 
 	let slotsQuery = locals.supabase
 		.from('available_slots')
 		.select(
-			'id, guide_id, slot_date, slot_time, starts_at, duration_minutes, status, booked_by, booked_at, created_at, created_by'
+			'id, guide_id, slot_date, slot_time, starts_at, duration_minutes, status, booked_by, booked_at, created_at, created_by, modified_by'
 		)
 		.gte('slot_date', formatDateKey(weekStart))
 		.lte('slot_date', formatDateKey(weekEnd))
@@ -266,7 +301,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const memberIds = uniqueStrings([
 		...slotRows.map((slot) => slot.booked_by),
-		...bookingRows.map((booking) => booking.user_id)
+		...bookingRows.map((booking) => booking.user_id),
+		...slotRows.map((slot) => slot.created_by),
+		...slotRows.map((slot) => slot.modified_by)
 	]);
 	const guideIds = uniqueStrings([...slotRows.map((slot) => slot.guide_id), ...guides.map((guide) => guide.id)]);
 
@@ -324,6 +361,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			id: slot.id,
 			guideId: slot.guide_id,
 			guideLabel: getGuideLabel(guide),
+			guideInitials: getGuideInitials(guide),
+			isOwnSlot: myGuideId ? slot.guide_id === myGuideId : false,
 			memberLabel:
 				slot.status === 'booked' || slot.status === 'completed'
 					? getMemberLabel(member)
@@ -335,6 +374,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			status: slot.status ?? 'open',
 			statusTone: buildSlotTone(slot.status ?? 'open'),
 			startsAt: slot.starts_at,
+			createdBy: slot.created_by,
+			modifiedBy: slot.modified_by,
+			modifiedByLabel:
+				slot.modified_by && slot.modified_by !== slot.created_by
+					? getProfileLabel(profilesMap.get(slot.modified_by))
+					: null,
 			bookingId: booking?.id ?? null,
 			bookingStatus: booking?.status ?? null,
 			paymentStatus: booking?.payment_status ?? null,
@@ -365,9 +410,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		role,
 		canPublish: role === 'admin' || role === 'moderator' || role === 'guide',
 		publishDisabledReason:
-			role === 'guide' && !guideId
+			role === 'guide' && !myGuideId
 				? 'Your account is not linked to a guide profile yet.'
+				: (role === 'admin' || role === 'moderator') && !myGuideId
+					? 'Your account is not linked to a guide profile. Ask an admin to create one from the Team page.'
 				: null,
+		myGuideId,
 		guides,
 		filters: {
 			view,
@@ -543,6 +591,7 @@ export const actions: Actions = {
 		}
 
 		const formData = await request.formData();
+		const { session } = await locals.safeGetSession();
 		const slotId = formData.get('slotId')?.toString().trim() ?? '';
 		const nextStatusValue = formData.get('status')?.toString().trim() ?? '';
 
@@ -590,7 +639,7 @@ export const actions: Actions = {
 
 		const { error: updateError } = await locals.supabase
 			.from('available_slots')
-			.update({ status: nextStatus })
+			.update({ status: nextStatus, modified_by: session?.user.id ?? null })
 			.eq('id', slotId);
 
 		if (updateError) {
@@ -612,6 +661,7 @@ export const actions: Actions = {
 		}
 
 		const formData = await request.formData();
+		const { session } = await locals.safeGetSession();
 		const bookingId = formData.get('bookingId')?.toString().trim() ?? '';
 		const meetingLink = formData.get('meetingLink')?.toString().trim() ?? '';
 
@@ -621,6 +671,20 @@ export const actions: Actions = {
 
 		if (meetingLink && !meetingLink.startsWith('https://')) {
 			return fail(400, { message: 'Please enter a valid https:// link.' });
+		}
+
+		const { data: booking, error: bookingError } = await locals.supabase
+			.from('bookings')
+			.select('id, guide_id, slot_id')
+			.eq('id', bookingId)
+			.maybeSingle();
+
+		if (bookingError) {
+			return fail(500, { message: bookingError.message });
+		}
+
+		if (!booking) {
+			return fail(404, { message: 'That booking could not be found.' });
 		}
 
 		if (isGuide) {
@@ -634,17 +698,7 @@ export const actions: Actions = {
 				return fail(403, { message: 'Your account is not linked to a guide profile yet.' });
 			}
 
-			const { data: booking, error: bookingError } = await locals.supabase
-				.from('bookings')
-				.select('guide_id')
-				.eq('id', bookingId)
-				.maybeSingle();
-
-			if (bookingError) {
-				return fail(500, { message: bookingError.message });
-			}
-
-			if (!booking || booking.guide_id !== myGuideId) {
+			if (booking.guide_id !== myGuideId) {
 				return fail(403, {
 					message: 'You can only update meeting links for your own bookings.'
 				});
@@ -658,6 +712,15 @@ export const actions: Actions = {
 
 		if (error) {
 			return fail(500, { message: error.message });
+		}
+
+		const { error: slotUpdateError } = await locals.supabase
+			.from('available_slots')
+			.update({ modified_by: session?.user.id ?? null })
+			.eq('id', booking.slot_id);
+
+		if (slotUpdateError) {
+			return fail(500, { message: slotUpdateError.message });
 		}
 
 		return { success: true, message: 'Meeting link saved.' };
