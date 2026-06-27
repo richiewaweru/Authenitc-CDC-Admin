@@ -53,8 +53,10 @@ async function sendTemplatedEmail(params: {
 			from: fromEmail,
 			to: params.to,
 			subject: params.subject,
-			template_id: params.templateId,
-			variables: params.variables
+			template: {
+				id: params.templateId,
+				variables: params.variables
+			}
 		})
 	});
 

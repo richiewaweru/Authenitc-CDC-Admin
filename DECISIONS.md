@@ -135,3 +135,8 @@
 - Decision: Complete the admin-panel slot ownership changes in this workspace and record the consumer-app verification as blocked by missing source files here, instead of inventing or patching a consumer service path that does not exist locally.
 - Why: The goal spec references `src/services/slotService.ts` for the consumer app, but this repository only contains the admin app and no matching consumer service or `ChooseSlot` implementation to inspect.
 - Docs said: Verify `fetchGuidesFromSupabase()` and `fetchSlotsFromSupabase()` in the consumer app and remove any role filter if present.
+
+### Resend template payload deployment
+- Decision: Deploy the Resend payload-shape fix for `send-member-email`, `send-booking-confirmation`, and `send-meeting-reminder` on 2026-06-27 so transactional email delivery should work for sends after this deployment timestamp.
+- Why: Resend rejected the old top-level `template_id` and `variables` payload with `422 Missing html or text field`; nesting them under `template` matches the API shape these functions already intend to use.
+- Docs said: Keep the helper signatures and callers unchanged, patch only the request body shape, and record the deployment date so delivery behavior is easy to compare before and after the fix.
