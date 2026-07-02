@@ -8,7 +8,7 @@
 
 	let { data, form } = $props();
 
-	let actionSubmitting = $state<'complete' | 'cancel' | 'grant' | null>(null);
+	let actionSubmitting = $state<'complete' | 'cancel' | 'grant' | 'meeting-link' | null>(null);
 	let toastMessage = $state('');
 	let toastTone = $state<'success' | 'error'>('success');
 	let toastVisible = $state(false);
@@ -157,7 +157,7 @@
 		}
 	}
 
-	function actionEnhance(kind: 'complete' | 'cancel' | 'grant'): SubmitFunction {
+	function actionEnhance(kind: 'complete' | 'cancel' | 'grant' | 'meeting-link'): SubmitFunction {
 		return () => {
 			actionSubmitting = kind;
 
@@ -605,6 +605,28 @@
 
 			<div class="rounded-[24px] border border-sand bg-background p-4">
 				<p class="section-eyebrow">Meeting link</p>
+				<form
+					method="POST"
+					action="?/updateMeetingLink"
+					use:enhance={actionEnhance('meeting-link')}
+					class="mt-3 flex gap-2"
+				>
+					<input type="hidden" name="bookingId" value={data.selectedBooking.id} />
+					<input
+						type="url"
+						name="meetingLink"
+						value={data.selectedBooking.meetingLink ?? ''}
+						placeholder="Paste Google Meet, Zoom, or Teams link..."
+						class="input-base flex-1 text-sm"
+					/>
+					<button
+						type="submit"
+						class="button-secondary shrink-0 text-sm"
+						disabled={actionSubmitting === 'meeting-link'}
+					>
+						{actionSubmitting === 'meeting-link' ? 'Saving...' : 'Save'}
+					</button>
+				</form>
 				{#if data.selectedBooking.meetingLink}
 					<a
 						href={data.selectedBooking.meetingLink}
@@ -612,19 +634,11 @@
 						rel="noreferrer"
 						class="mt-3 inline-flex text-sm font-semibold text-primary underline"
 					>
-						Test link →
-					</a>
-					<a
-						href={data.selectedBooking.meetingLink}
-						target="_blank"
-						rel="noreferrer"
-						class="mt-2 block text-sm text-primary underline break-all"
-					>
-						{data.selectedBooking.meetingLink}
+						Test link ->
 					</a>
 				{:else}
 					<p class="mt-3 text-sm italic text-on-surface-variant">
-						No meeting link set - add one from the Slots page.
+						No meeting link set.
 					</p>
 				{/if}
 			</div>

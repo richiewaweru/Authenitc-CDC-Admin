@@ -182,6 +182,14 @@ function normalizeDuration(value: string | null) {
 	return Number.isNaN(parsed) || parsed < 15 ? 30 : parsed;
 }
 
+function normalizeMeetingLink(value: FormDataEntryValue | null) {
+	return value?.toString().trim() ?? '';
+}
+
+function isValidMeetingLink(value: string) {
+	return !value || value.startsWith('https://');
+}
+
 async function getMyGuideId(locals: App.Locals) {
 	const { data, error } = await locals.supabase.rpc('get_my_guide_id');
 
@@ -263,7 +271,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	let slotsQuery = locals.supabase
 		.from('available_slots')
 		.select(
-			'id, guide_id, slot_date, slot_time, starts_at, duration_minutes, status, booked_by, booked_at, created_at, created_by, modified_by'
+			'id, guide_id, slot_date, slot_time, starts_at, duration_minutes, status, booked_by, booked_at, meeting_link, created_at, created_by, modified_by'
 		)
 		.gte('slot_date', formatDateKey(weekStart))
 		.lte('slot_date', formatDateKey(weekEnd))
@@ -383,7 +391,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			bookingId: booking?.id ?? null,
 			bookingStatus: booking?.status ?? null,
 			paymentStatus: booking?.payment_status ?? null,
-			meetingLink: booking?.meeting_link ?? null
+			meetingLink: slot.meeting_link ?? booking?.meeting_link ?? null
 		};
 	});
 
@@ -456,6 +464,7 @@ export const actions: Actions = {
 		const startDate = formData.get('startDate')?.toString().trim() ?? '';
 		const endDate = formData.get('endDate')?.toString().trim() ?? '';
 		const duration = normalizeDuration(formData.get('duration')?.toString() ?? '30');
+		const meetingLink = normalizeMeetingLink(formData.get('meetingLink'));
 		const excludeWeekends = formData.get('excludeWeekends') === 'on';
 		const customTime = normalizeTimeKey(formData.get('customTime')?.toString().trim() ?? null);
 		const selectedTimes = uniqueStrings(
@@ -481,6 +490,10 @@ export const actions: Actions = {
 
 		if (!resolvedGuideId) {
 			return fail(400, { message: 'Choose a guide before publishing slots.' });
+		}
+
+		if (!isValidMeetingLink(meetingLink)) {
+			return fail(400, { message: 'Please enter a valid https:// link.' });
 		}
 
 		const parsedStart = parseDateKey(startDate);
@@ -557,6 +570,7 @@ export const actions: Actions = {
 					starts_at: toUtcIsoString(dateKey, timeKey),
 					duration_minutes: duration,
 					status: 'open',
+					meeting_link: meetingLink || null,
 					created_by: session?.user.id ?? null,
 					created_at: new Date().toISOString()
 				});
@@ -651,6 +665,83 @@ export const actions: Actions = {
 			message: `Slot ${slot.slot_date ?? ''} ${normalizeTimeKey(slot.slot_time) ? formatTimeLabel(normalizeTimeKey(slot.slot_time)!) : ''} is now ${nextStatus}.`
 		};
 	},
+	updateSlotMeetingLink: async ({ locals, request }) => {
+		const role = await resolveAppRole(locals);
+		const isStaff = role === 'admin' || role === 'moderator';
+		const isGuide = role === 'guide';
+
+		if (!isStaff && !isGuide) {
+			return fail(403, { message: 'Only staff members can update meeting links.' });
+		}
+
+		const formData = await request.formData();
+		const { session } = await locals.safeGetSession();
+		const slotId = formData.get('slotId')?.toString().trim() ?? '';
+		const meetingLink = normalizeMeetingLink(formData.get('meetingLink'));
+
+		if (!slotId) {
+			return fail(400, { message: 'Slot id is required.' });
+		}
+
+		if (!isValidMeetingLink(meetingLink)) {
+			return fail(400, { message: 'Please enter a valid https:// link.' });
+		}
+
+		const { data: slot, error: slotError } = await locals.supabase
+			.from('available_slots')
+			.select('id, guide_id, status')
+			.eq('id', slotId)
+			.maybeSingle();
+
+		if (slotError) {
+			return fail(500, { message: slotError.message });
+		}
+
+		if (!slot) {
+			return fail(404, { message: 'That slot could not be found.' });
+		}
+
+		if (isGuide) {
+			const { guideId: myGuideId, error } = await getMyGuideId(locals);
+
+			if (error) {
+				return fail(500, { message: error });
+			}
+
+			if (!myGuideId) {
+				return fail(403, { message: 'Your account is not linked to a guide profile yet.' });
+			}
+
+			if (slot.guide_id !== myGuideId) {
+				return fail(403, { message: 'You can only update meeting links for your own slots.' });
+			}
+		}
+
+		const nextMeetingLink = meetingLink || null;
+		const timestamp = new Date().toISOString();
+		const { error: updateSlotError } = await locals.supabase
+			.from('available_slots')
+			.update({ meeting_link: nextMeetingLink, modified_by: session?.user.id ?? null })
+			.eq('id', slotId);
+
+		if (updateSlotError) {
+			return fail(500, { message: updateSlotError.message });
+		}
+
+		if (slot.status === 'booked') {
+			const { error: updateBookingError } = await locals.supabase
+				.from('bookings')
+				.update({ meeting_link: nextMeetingLink, updated_at: timestamp })
+				.eq('slot_id', slotId)
+				.eq('status', 'confirmed');
+
+			if (updateBookingError) {
+				return fail(500, { message: updateBookingError.message });
+			}
+		}
+
+		return { success: true, message: 'Meeting link saved.' };
+	},
 	updateMeetingLink: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);
 		const isStaff = role === 'admin' || role === 'moderator';
@@ -663,13 +754,13 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const { session } = await locals.safeGetSession();
 		const bookingId = formData.get('bookingId')?.toString().trim() ?? '';
-		const meetingLink = formData.get('meetingLink')?.toString().trim() ?? '';
+		const meetingLink = normalizeMeetingLink(formData.get('meetingLink'));
 
 		if (!bookingId) {
 			return fail(400, { message: 'Booking id is required.' });
 		}
 
-		if (meetingLink && !meetingLink.startsWith('https://')) {
+		if (!isValidMeetingLink(meetingLink)) {
 			return fail(400, { message: 'Please enter a valid https:// link.' });
 		}
 

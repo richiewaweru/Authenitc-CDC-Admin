@@ -120,6 +120,7 @@ export type Database = {
 					status: SlotStatus | null;
 					booked_by: string | null;
 					booked_at: string | null;
+					meeting_link: string | null;
 					created_at: string | null;
 					created_by: string | null;
 					modified_by: string | null;
@@ -134,6 +135,7 @@ export type Database = {
 					status?: SlotStatus | null;
 					booked_by?: string | null;
 					booked_at?: string | null;
+					meeting_link?: string | null;
 					created_at?: string | null;
 					created_by?: string | null;
 					modified_by?: string | null;
@@ -147,6 +149,7 @@ export type Database = {
 					status?: SlotStatus | null;
 					booked_by?: string | null;
 					booked_at?: string | null;
+					meeting_link?: string | null;
 					created_at?: string | null;
 					created_by?: string | null;
 					modified_by?: string | null;

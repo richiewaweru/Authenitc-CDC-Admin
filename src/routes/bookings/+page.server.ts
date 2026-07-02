@@ -90,6 +90,14 @@ function normalizeBookingId(value: string | null) {
 	return trimmed || null;
 }
 
+function normalizeMeetingLink(value: FormDataEntryValue | null) {
+	return value?.toString().trim() ?? '';
+}
+
+function isValidMeetingLink(value: string) {
+	return !value || value.startsWith('https://');
+}
+
 function startOfWeek(date: Date) {
 	const next = new Date(date);
 	next.setHours(0, 0, 0, 0);
@@ -508,6 +516,64 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
+	updateMeetingLink: async ({ locals, request }) => {
+		const role = await resolveAppRole(locals);
+		const isStaff = role === 'admin' || role === 'moderator';
+		const isGuide = role === 'guide';
+
+		if (!isStaff && !isGuide) {
+			return fail(403, { message: 'Only staff members can update meeting links.' });
+		}
+
+		const formData = await request.formData();
+		const bookingId = formData.get('bookingId')?.toString().trim() ?? '';
+		const meetingLink = normalizeMeetingLink(formData.get('meetingLink'));
+
+		if (!bookingId) {
+			return fail(400, { message: 'Booking id is required.' });
+		}
+
+		if (!isValidMeetingLink(meetingLink)) {
+			return fail(400, { message: 'Please enter a valid https:// link.' });
+		}
+
+		const { data: booking, error: bookingError } = await locals.supabase
+			.from('bookings')
+			.select('id, guide_id')
+			.eq('id', bookingId)
+			.maybeSingle();
+
+		if (bookingError) {
+			return fail(500, { message: bookingError.message });
+		}
+
+		if (!booking) {
+			return fail(404, { message: 'Booking not found.' });
+		}
+
+		if (isGuide) {
+			const { data: guideId, error: guideIdError } = await locals.supabase.rpc('get_my_guide_id');
+
+			if (guideIdError) {
+				return fail(500, { message: guideIdError.message });
+			}
+
+			if (!guideId || guideId !== booking.guide_id) {
+				return fail(403, { message: 'You can only update meeting links for your own bookings.' });
+			}
+		}
+
+		const { error: updateError } = await locals.supabase
+			.from('bookings')
+			.update({ meeting_link: meetingLink || null, updated_at: new Date().toISOString() })
+			.eq('id', bookingId);
+
+		if (updateError) {
+			return fail(500, { message: updateError.message });
+		}
+
+		return { success: true, message: 'Meeting link saved.' };
+	},
 	completeBooking: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);
 		const isStaff = role === 'admin' || role === 'moderator';

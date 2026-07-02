@@ -271,7 +271,7 @@
 	}
 
 	function showMeetingLinkForm(slot: ListSlot) {
-		return (slot.status === 'booked' || slot.status === 'completed') && Boolean(slot.bookingId);
+		return data.canPublish && (slot.status === 'open' || slot.status === 'booked' || slot.status === 'cancelled');
 	}
 
 	resetPublishForm();
@@ -519,11 +519,11 @@
 								<p class="section-eyebrow mb-2">Meeting link</p>
 								<form
 									method="POST"
-									action="?/updateMeetingLink"
+									action="?/updateSlotMeetingLink"
 									use:enhance={slotActionEnhance(slot, 'meeting-link', 'update')}
 									class="flex gap-2"
 								>
-									<input type="hidden" name="bookingId" value={slot.bookingId ?? ''} />
+									<input type="hidden" name="slotId" value={slot.id} />
 									<input
 										type="url"
 										name="meetingLink"
@@ -626,11 +626,11 @@
 														<p class="section-eyebrow mb-2">Meeting link</p>
 														<form
 															method="POST"
-															action="?/updateMeetingLink"
+															action="?/updateSlotMeetingLink"
 															use:enhance={slotActionEnhance(item, 'meeting-link', 'update')}
 															class="space-y-2"
 														>
-															<input type="hidden" name="bookingId" value={item.bookingId ?? ''} />
+															<input type="hidden" name="slotId" value={item.id} />
 															<input
 																type="url"
 																name="meetingLink"
@@ -742,11 +742,11 @@
 								<p class="section-eyebrow mb-2">Meeting link</p>
 								<form
 									method="POST"
-									action="?/updateMeetingLink"
+									action="?/updateSlotMeetingLink"
 									use:enhance={slotActionEnhance(slot, 'meeting-link', 'update')}
 									class="flex gap-2"
 								>
-									<input type="hidden" name="bookingId" value={slot.bookingId ?? ''} />
+									<input type="hidden" name="slotId" value={slot.id} />
 									<input
 										type="url"
 										name="meetingLink"
@@ -854,11 +854,11 @@
 										<div class="min-w-[260px] space-y-2">
 											<form
 												method="POST"
-												action="?/updateMeetingLink"
+												action="?/updateSlotMeetingLink"
 												use:enhance={slotActionEnhance(slot, 'meeting-link', 'update')}
 												class="flex gap-2"
 											>
-												<input type="hidden" name="bookingId" value={slot.bookingId ?? ''} />
+												<input type="hidden" name="slotId" value={slot.id} />
 												<input
 													type="url"
 													name="meetingLink"
@@ -886,11 +886,7 @@
 											{/if}
 										</div>
 									{:else}
-										<span class="text-xs italic">
-											{slot.status === 'open' || slot.status === 'cancelled'
-												? 'Available after booking'
-												: 'No linked booking'}
-										</span>
+										<span class="text-xs italic">Not editable for this status</span>
 									{/if}
 								</td>
 								<td class="border-b border-sand/80 px-4 py-4">
@@ -1053,6 +1049,19 @@
 					<option value="60">60 minutes</option>
 					<option value="90">90 minutes</option>
 				</select>
+			</div>
+
+			<div class="space-y-2">
+				<label class="text-sm font-semibold text-on-surface" for="meetingLink">
+					Meeting link (applies to every slot in this batch)
+				</label>
+				<input
+					id="meetingLink"
+					name="meetingLink"
+					type="url"
+					class="input-base"
+					placeholder="https://meet.google.com/..."
+				/>
 			</div>
 
 			<div class="rounded-[24px] border border-sand bg-background p-4">

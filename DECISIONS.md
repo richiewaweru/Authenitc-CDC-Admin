@@ -140,3 +140,15 @@
 - Decision: Deploy the Resend payload-shape fix for `send-member-email`, `send-booking-confirmation`, and `send-meeting-reminder` on 2026-06-27 so transactional email delivery should work for sends after this deployment timestamp.
 - Why: Resend rejected the old top-level `template_id` and `variables` payload with `422 Missing html or text field`; nesting them under `template` matches the API shape these functions already intend to use.
 - Docs said: Keep the helper signatures and callers unchanged, patch only the request body shape, and record the deployment date so delivery behavior is easy to compare before and after the fix.
+
+## 2026-07-02
+
+### Admin meeting-link action location
+- Decision: Add the booking-level `updateMeetingLink` action to `src/routes/bookings/+page.server.ts` while moving Slots page forms to a new slot-level `updateSlotMeetingLink` action.
+- Why: The Phase 3 brief described an existing booking drawer action, but inspection showed `updateMeetingLink` only existed on the Slots route and wrote directly to `bookings`.
+- Docs said: The slot should be canonical, and the booking drawer should remain an editable per-booking override.
+
+### Available slot meeting-link typing
+- Decision: Extend local generated database types with `available_slots.meeting_link`.
+- Why: The applied migration added the column, but the checked-in type file only modeled `bookings.meeting_link`, which would otherwise reject slot inserts and updates at compile time.
+- Docs said: `phase3_slot_meeting_link.sql` has already been run, so app code should target the repaired schema.
