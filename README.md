@@ -39,7 +39,7 @@ npm run check
 
 ## Supabase Function Deploy
 
-Milestone 3 currently depends on the remote `admin-invite-staff` Edge Function being updated to the latest invite-link flow.
+Staff invite verification depends on the remote `admin-invite-staff` Edge Function being deployed with the latest email-invite flow.
 
 Set a Supabase personal access token, then run:
 

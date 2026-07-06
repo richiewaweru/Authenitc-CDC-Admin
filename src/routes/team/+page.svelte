@@ -24,12 +24,6 @@
 	let toastMessage = $state('');
 	let toastType = $state<'success' | 'error'>('success');
 	let toastVisible = $state(false);
-	let inviteDelivery = $state<{
-		email: string;
-		role: 'moderator' | 'guide';
-		link: string;
-		message: string;
-	} | null>(null);
 	let adminGuideModalOpen = $state(false);
 	let selectedAdmin = $state<AdminRow | null>(null);
 	let adminGuideName = $state('');
@@ -66,15 +60,6 @@
 		setTimeout(() => {
 			toastVisible = false;
 		}, 4000);
-	}
-
-	async function copyInviteLink(link: string) {
-		try {
-			await navigator.clipboard.writeText(link);
-			showToast('Invite link copied.');
-		} catch {
-			showToast('Could not copy the invite link automatically.', 'error');
-		}
 	}
 
 	function getInitials(name: string | null, email: string | null): string {
@@ -142,10 +127,6 @@
 		inviteSubmitting = false;
 	}
 
-	function closeInviteDelivery() {
-		inviteDelivery = null;
-	}
-
 	function openModal(role: 'moderator' | 'guide' = 'moderator') {
 		closeModal();
 		inviteRole = role;
@@ -186,15 +167,6 @@
 				await update();
 				closeModal();
 				showToast(result.data?.message ?? 'Team access updated.');
-
-				if (result.data?.inviteLink && result.data?.inviteEmail && result.data?.inviteRole) {
-					inviteDelivery = {
-						email: result.data.inviteEmail,
-						role: result.data.inviteRole,
-						link: result.data.inviteLink,
-						message: result.data.message ?? 'Invite link ready.'
-					};
-				}
 				return;
 			}
 
@@ -270,24 +242,15 @@
 
 				if (result.type === 'success') {
 					await update();
-					showToast(result.data?.message ?? 'Invite link refreshed.');
-
-					if (result.data?.inviteLink && result.data?.inviteEmail && result.data?.inviteRole) {
-						inviteDelivery = {
-							email: result.data.inviteEmail,
-							role: result.data.inviteRole,
-							link: result.data.inviteLink,
-							message: result.data.message ?? 'Invite link refreshed.'
-						};
-					}
+					showToast(result.data?.message ?? 'Invite email resent.');
 					return;
 				}
 
 				await applyAction(result);
 				showToast(
 					result.type === 'failure'
-						? result.data?.message ?? 'Could not refresh the invite.'
-						: 'Something went wrong while refreshing the invite.',
+						? result.data?.message ?? 'Could not resend the invite email.'
+						: 'Something went wrong while resending the invite email.',
 					'error'
 				);
 			};
@@ -347,7 +310,7 @@
 			<h1 class="panel-title">Team Management</h1>
 			<p class="max-w-3xl text-sm leading-7 text-on-surface-variant">
 				Only admins can access this page. Promote moderators, track guide linking status, and
-				manage pending invite links from one place.
+				manage pending email invites from one place.
 			</p>
 		</div>
 
@@ -379,43 +342,6 @@
 					<li>{issue}</li>
 				{/each}
 			</ul>
-		</div>
-	{/if}
-
-	{#if inviteDelivery}
-		<div class="shell-card space-y-4 border-primary/20 bg-success/55">
-			<div class="space-y-1">
-				<p class="section-eyebrow text-primary-dark">Invite Link Ready</p>
-				<h2 class="font-display text-2xl font-semibold text-primary-dark">{inviteDelivery.message}</h2>
-				<p class="text-sm text-primary-dark/80">
-					Send this secure setup link to <span class="font-semibold">{inviteDelivery.email}</span>. They
-					will use it once to finish their <span class="font-semibold">{inviteDelivery.role}</span>
-					account setup.
-				</p>
-			</div>
-
-			<div class="rounded-[24px] border border-primary/15 bg-white/80 p-4">
-				<p class="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-on-surface-variant">
-					Invite link
-				</p>
-				<textarea class="input-base min-h-28 resize-y text-xs leading-6" readonly value={inviteDelivery.link}></textarea>
-			</div>
-
-			<div class="flex flex-wrap gap-3">
-				<button
-					type="button"
-					class="button-primary"
-					onclick={() => inviteDelivery && copyInviteLink(inviteDelivery.link)}
-				>
-					Copy link
-				</button>
-				<a class="button-secondary" href={inviteDelivery.link} target="_blank" rel="noreferrer">
-					Open link
-				</a>
-				<button type="button" class="button-secondary" onclick={closeInviteDelivery}>
-					Dismiss
-				</button>
-			</div>
 		</div>
 	{/if}
 
@@ -627,7 +553,7 @@
 												class="button-secondary text-xs"
 												disabled={actionSubmitting === `refresh:${invite.id}`}
 											>
-												{actionSubmitting === `refresh:${invite.id}` ? 'Refreshing...' : 'Refresh link'}
+												{actionSubmitting === `refresh:${invite.id}` ? 'Resending...' : 'Resend email'}
 											</button>
 										</form>
 
@@ -700,12 +626,12 @@
 			<div class="space-y-2">
 				<p class="section-eyebrow">{inviteRole === 'moderator' ? 'Add Moderator' : 'Invite Guide'}</p>
 				<h2 id="team-modal-title" class="font-display text-2xl font-semibold text-on-surface">
-					{inviteRole === 'moderator' ? 'Search by email, then confirm promotion.' : 'Generate a guide setup link.'}
+					{inviteRole === 'moderator' ? 'Search by email, then confirm promotion.' : 'Email a guide invite.'}
 				</h2>
 				<p class="text-sm leading-7 text-on-surface-variant">
 					{inviteRole === 'moderator'
-						? 'If the email matches an existing member, they will gain moderator access immediately. Otherwise we will prepare a secure invite link.'
-						: 'Guide invites keep the same link-based setup flow used elsewhere in the admin panel.'}
+						? 'If the email matches an existing member, they will gain moderator access immediately. Otherwise we will email a secure invite.'
+						: 'Guide invites email a secure setup link so the guide can set a password and finish account setup.'}
 				</p>
 			</div>
 
@@ -768,7 +694,7 @@
 						{:else}
 							<p class="section-eyebrow">Invite Flow</p>
 							<p class="mt-3 text-sm leading-7 text-on-surface-variant">
-								No existing member matches this email yet, so we will prepare an invite they can use to set their password and activate moderator access later.
+								No existing member matches this email yet, so we will email an invite they can use to set their password and activate moderator access later.
 							</p>
 						{/if}
 

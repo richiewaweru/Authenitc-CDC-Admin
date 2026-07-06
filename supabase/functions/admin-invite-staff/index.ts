@@ -15,11 +15,6 @@ interface InviteRequest {
 	inviteId?: string;
 }
 
-type InviteLinkResult = {
-	link: string;
-	userId: string;
-};
-
 type AppRole = 'admin' | 'moderator' | 'guide' | 'member';
 
 const ROLE_RANK: Record<AppRole, number> = {
@@ -89,27 +84,24 @@ async function syncGuideProfile(
 	}
 }
 
-async function generateInviteLink(
+async function sendStaffInvite(
 	adminClient: ReturnType<typeof createClient>,
 	email: string,
+	role: 'moderator' | 'guide',
 	redirectTo: string
-): Promise<InviteLinkResult> {
-	const { data, error } = await adminClient.auth.admin.generateLink({
-		type: 'invite',
-		email,
-		options: {
-			redirectTo
+): Promise<string> {
+	const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
+		redirectTo,
+		data: {
+			pending_staff_role: role
 		}
 	});
 
-	if (error || !data?.properties?.action_link || !data.user?.id) {
-		throw error ?? new Error('Could not generate the invite link');
+	if (error || !data.user?.id) {
+		throw error ?? new Error('Could not send the invite email');
 	}
 
-	return {
-		link: data.properties.action_link,
-		userId: data.user.id
-	};
+	return data.user.id;
 }
 
 async function stampPendingStaffRole(
@@ -229,6 +221,97 @@ async function finalizeStaffInvite(
 	};
 }
 
+async function findAuthUserByEmail(adminClient: ReturnType<typeof createClient>, email: string) {
+	const {
+		data: { users }
+	} = await adminClient.auth.admin.listUsers();
+
+	return users?.find((user) => user.email?.toLowerCase() === email.toLowerCase()) ?? null;
+}
+
+async function deleteUnconfirmedAuthUser(adminClient: ReturnType<typeof createClient>, email: string) {
+	const existingUser = await findAuthUserByEmail(adminClient, email);
+
+	if (!existingUser || existingUser.email_confirmed_at) {
+		return;
+	}
+
+	const { error } = await adminClient.auth.admin.deleteUser(existingUser.id);
+
+	if (error) {
+		throw error;
+	}
+}
+
+async function createStaffInvite(
+	adminClient: ReturnType<typeof createClient>,
+	params: {
+		email: string;
+		role: 'moderator' | 'guide';
+		redirectTo: string;
+		callerId: string;
+		guideName?: string;
+		guideTitle?: string;
+	}
+) {
+	await adminClient
+		.from('invites')
+		.delete()
+		.eq('email', params.email)
+		.eq('role', params.role)
+		.is('accepted_at', null);
+	await deleteUnconfirmedAuthUser(adminClient, params.email);
+
+	let invitedUserId: string;
+
+	try {
+		invitedUserId = await sendStaffInvite(adminClient, params.email, params.role, params.redirectTo);
+		await stampPendingStaffRole(adminClient, invitedUserId, params.role);
+	} catch (inviteError) {
+		console.error('Failed to email invite:', inviteError);
+		return jsonResponse({ error: 'Failed to email invite' }, 500);
+	}
+
+	const { error: inviteRecordError } = await adminClient.from('invites').insert({
+		email: params.email,
+		role: params.role,
+		invited_by: params.callerId
+	});
+
+	if (inviteRecordError) {
+		console.error('Failed to create invite:', inviteRecordError);
+		await adminClient.auth.admin.deleteUser(invitedUserId);
+		return jsonResponse({ error: 'Failed to create invite record' }, 500);
+	}
+
+	if (params.role === 'guide') {
+		try {
+			await syncGuideProfile(adminClient, {
+				userId: invitedUserId,
+				email: params.email,
+				guideName: params.guideName,
+				guideTitle: params.guideTitle,
+				callerId: params.callerId
+			});
+		} catch (guideError) {
+			console.error('Failed to sync guide profile:', guideError);
+			await adminClient
+				.from('invites')
+				.delete()
+				.eq('email', params.email)
+				.eq('role', params.role)
+				.is('accepted_at', null);
+			await adminClient.auth.admin.deleteUser(invitedUserId);
+			return jsonResponse({ error: 'Failed to create the guide profile' }, 500);
+		}
+	}
+
+	return jsonResponse({
+		success: true,
+		message: `Invite emailed to ${params.email}.`
+	});
+}
+
 Deno.serve(async (req: Request) => {
 	if (req.method === 'OPTIONS') {
 		return new Response('ok', { headers: corsHeaders });
@@ -336,62 +419,13 @@ Deno.serve(async (req: Request) => {
 				return jsonResponse({ error: 'Email and role are required for resend' }, 400);
 			}
 
-			await adminClient.from('invites').delete().eq('email', email).is('accepted_at', null);
-
-			const {
-				data: { users }
-			} = await adminClient.auth.admin.listUsers();
-			const stubUser = users?.find((user) => user.email === email && !user.email_confirmed_at);
-
-			if (stubUser) {
-				await adminClient.auth.admin.deleteUser(stubUser.id);
-			}
-
-			const { error: inviteError } = await adminClient.from('invites').insert({
+			return createStaffInvite(adminClient, {
 				email,
 				role,
-				invited_by: caller.id
-			});
-
-			if (inviteError) {
-				console.error('Failed to create invite:', inviteError);
-				return jsonResponse({ error: 'Failed to create invite record' }, 500);
-			}
-
-			let inviteLinkData: InviteLinkResult;
-
-			try {
-				inviteLinkData = await generateInviteLink(adminClient, email, redirectTo);
-				await stampPendingStaffRole(adminClient, inviteLinkData.userId, role);
-			} catch (inviteLinkError) {
-				console.error('Failed to generate invite link:', inviteLinkError);
-				await adminClient.from('invites').delete().eq('email', email).is('accepted_at', null);
-				return jsonResponse({ error: 'Failed to generate invite link' }, 500);
-			}
-
-			if (role === 'guide') {
-				try {
-					await syncGuideProfile(adminClient, {
-						userId: inviteLinkData.userId,
-						email,
-						guideName,
-						guideTitle,
-						callerId: caller.id
-					});
-				} catch (guideError) {
-					console.error('Failed to sync guide profile:', guideError);
-					await adminClient.from('invites').delete().eq('email', email).is('accepted_at', null);
-					await adminClient.auth.admin.deleteUser(inviteLinkData.userId);
-					return jsonResponse({ error: 'Failed to create the guide profile' }, 500);
-				}
-			}
-
-			return jsonResponse({
-				success: true,
-				message: `Invite link refreshed for ${email} as ${role}.`,
-				inviteLink: inviteLinkData.link,
-				inviteEmail: email,
-				inviteRole: role
+				redirectTo,
+				callerId: caller.id,
+				guideName,
+				guideTitle
 			});
 		}
 
@@ -405,23 +439,9 @@ Deno.serve(async (req: Request) => {
 			return jsonResponse({ error: 'Role must be moderator or guide' }, 400);
 		}
 
-		const { data: existingInvite } = await adminClient
-			.from('invites')
-			.select('id')
-			.eq('email', email)
-			.is('accepted_at', null)
-			.maybeSingle();
+		const existingUser = await findAuthUserByEmail(adminClient, email);
 
-		if (existingInvite) {
-			return jsonResponse({ error: 'This email already has a pending invite' }, 409);
-		}
-
-		const {
-			data: { users: existingUsers }
-		} = await adminClient.auth.admin.listUsers();
-		const existingUser = existingUsers?.find((user) => user.email === email);
-
-		if (existingUser) {
+		if (existingUser?.email_confirmed_at) {
 			const { data: existingProfile, error: existingProfileError } = await adminClient
 				.from('profiles')
 				.select('role')
@@ -464,51 +484,13 @@ Deno.serve(async (req: Request) => {
 			});
 		}
 
-		const { error: inviteError } = await adminClient.from('invites').insert({
+		return createStaffInvite(adminClient, {
 			email,
 			role,
-			invited_by: caller.id
-		});
-
-		if (inviteError) {
-			console.error('Failed to create invite:', inviteError);
-			return jsonResponse({ error: 'Failed to create invite record' }, 500);
-		}
-
-		let inviteLinkData: InviteLinkResult;
-
-		try {
-			inviteLinkData = await generateInviteLink(adminClient, email, redirectTo);
-			await stampPendingStaffRole(adminClient, inviteLinkData.userId, role);
-		} catch (inviteLinkError) {
-			console.error('Failed to generate invite link:', inviteLinkError);
-			await adminClient.from('invites').delete().eq('email', email).is('accepted_at', null);
-			return jsonResponse({ error: 'Failed to generate invite link' }, 500);
-		}
-
-		if (role === 'guide') {
-			try {
-				await syncGuideProfile(adminClient, {
-					userId: inviteLinkData.userId,
-					email,
-					guideName,
-					guideTitle,
-					callerId: caller.id
-				});
-			} catch (guideError) {
-				console.error('Failed to sync guide profile:', guideError);
-				await adminClient.from('invites').delete().eq('email', email).is('accepted_at', null);
-				await adminClient.auth.admin.deleteUser(inviteLinkData.userId);
-				return jsonResponse({ error: 'Failed to create the guide profile' }, 500);
-			}
-		}
-
-		return jsonResponse({
-			success: true,
-			message: `Invite link ready for ${email} as ${role}.`,
-			inviteLink: inviteLinkData.link,
-			inviteEmail: email,
-			inviteRole: role
+			redirectTo,
+			callerId: caller.id,
+			guideName,
+			guideTitle
 		});
 	} catch (err) {
 		console.error('Unexpected error:', err);

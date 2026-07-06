@@ -44,6 +44,11 @@
 - Why: The user wanted a link-based setup flow, and live verification showed SMTP-backed invite delivery was the unstable piece blocking Milestone 3. Generated invite links keep the same auth model without relying on the email provider being configured correctly.
 - Docs said: Invites should let guides and moderators open a link, set their password, and then log in with email/password.
 
+### Staff invite email delivery
+- Decision: Switch the active admin invite path back to Supabase `inviteUserByEmail()` now that Supabase Auth SMTP is configured through Resend, and stop returning manual invite links to the UI.
+- Why: `generateLink({ type: 'invite' })` creates a link but does not send email, so new moderators and guides never receive the invite unless an admin manually copies it. The live admin UI calls `src/lib/adminApi.ts -> admin-invite-staff`; the duplicated `src/routes/team/+page.server.ts` path is kept in parity for fallback/server-action flows.
+- Docs said: Use the admin app `/auth/callback` redirect so invite recipients can set a password, sign in, and have pending staff metadata finalized.
+
 ### Server-side role resolution
 - Decision: Resolve the current app role through a shared server helper in each server load/action that needs it instead of relying on `+layout.server.ts` to mutate `locals.role` first.
 - Why: Live browser verification exposed that page server loads can run without seeing the role cached by the layout load, which caused the admin-only `/team` route to redirect to `/` incorrectly for a valid admin session.

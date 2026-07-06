@@ -23,5 +23,5 @@ Write-Host ""
 Write-Host "Deployment complete." -ForegroundColor Green
 Write-Host "Next verification steps:" -ForegroundColor Cyan
 Write-Host "1. Open /guides and create a guide invite."
-Write-Host "2. Confirm the UI shows a copyable invite link."
-Write-Host "3. Open /team and verify moderator/guide invite links render there too."
+Write-Host "2. Confirm the recipient receives the invite email."
+Write-Host "3. Open /team and verify moderator/guide resend sends a fresh invite email."

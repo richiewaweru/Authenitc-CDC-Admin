@@ -14,9 +14,6 @@ export interface InviteResponse {
 	success: boolean;
 	message: string;
 	alreadyRegistered?: boolean;
-	inviteLink?: string;
-	inviteEmail?: string;
-	inviteRole?: 'moderator' | 'guide';
 }
 
 export interface AdminApiError {

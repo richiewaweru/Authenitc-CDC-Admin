@@ -20,6 +20,22 @@ Use this format each time a milestone is completed:
 
 ---
 
+## Phase 2: Staff invite email delivery
+
+- Date: 2026-07-06
+- Status: Deployed; live inbox gate pending
+- Commands run:
+  - `npm run check`
+  - `rg -n "generateLink|generateInviteLink|inviteLink|Invite Link|Refresh link|copyInviteLink|inviteDelivery|Invite link" src supabase README.md SUPABASE_DEPLOY.md scripts VERIFICATION.md`
+  - `supabase functions deploy admin-invite-staff --project-ref mgaenmoeyiovwykibemg`
+- What passed:
+  - `admin-invite-staff` and the duplicate Team server action now use Supabase `inviteUserByEmail()`
+  - Manual invite-link response fields and UI panels were removed from Team and Guides
+  - Type checks passed with 0 errors and 0 warnings
+  - The edge function deployed to Supabase project `mgaenmoeyiovwykibemg`
+- What could not be verified:
+  - Live inbox receipt, password setup, sign-in, role finalization, resend, revoke, and confirmed-user promotion still need an accessible recipient inbox and admin session
+
 ## Milestone 1: Project Scaffold + Auth
 
 - Date: 2026-06-08
@@ -116,7 +132,7 @@ Use this format each time a milestone is completed:
   - Centralized server-side role resolution in a shared helper so page loads do not depend on `+layout.server.ts` mutating `locals.role`; this fixed the admin `/team` route bouncing back to `/`
   - Switched new guide creation to the invite-first flow after live database testing showed `guide_profiles.id` cannot be inserted as a free-floating row
   - Added invite-aware delete cleanup so pending guide invites can be revoked from the Guides page
-  - Replaced the local edge-function implementation with Supabase `generateLink({ type: 'invite' })` so invite delivery no longer depends on SMTP
+  - Earlier replaced the local edge-function implementation with generated invite links; superseded on 2026-07-06 after Supabase Auth SMTP was configured
   - Added `scripts/deploy-admin-invite-function.ps1` and README deployment instructions so the remote function can be pushed with a single command once a Supabase access token is available
   - Added `SUPABASE_DEPLOY.md` plus `artifacts/admin-invite-staff-dashboard-upload.zip` so the same function can also be deployed from the Supabase Dashboard without CLI auth
   - Loader account-state logic now cross-checks pending guide invites so a pre-created auth user from Supabase invite generation does not show up incorrectly as `Linked account`

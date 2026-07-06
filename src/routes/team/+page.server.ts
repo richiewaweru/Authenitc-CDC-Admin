@@ -190,24 +190,20 @@ async function deleteUnconfirmedAuthUser(email: string) {
 	}
 }
 
-async function generateInviteLink(email: string, redirectTo: string) {
+async function sendStaffInvite(email: string, role: StaffInviteRole, redirectTo: string) {
 	const adminSupabase = getSupabaseAdminClient();
-	const { data, error } = await adminSupabase.auth.admin.generateLink({
-		type: 'invite',
-		email,
-		options: {
-			redirectTo
+	const { data, error } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
+		redirectTo,
+		data: {
+			pending_staff_role: role
 		}
 	});
 
-	if (error || !data?.properties?.action_link || !data.user?.id) {
-		throw new Error(error?.message ?? 'Could not generate the invite link.');
+	if (error || !data.user?.id) {
+		throw new Error(error?.message ?? 'Could not send the invite email.');
 	}
 
-	return {
-		link: data.properties.action_link,
-		userId: data.user.id
-	};
+	return data.user.id;
 }
 
 async function createOrRefreshStaffAccess(params: {
@@ -279,6 +275,9 @@ async function createOrRefreshStaffAccess(params: {
 	await adminSupabase.from('invites').delete().eq('email', params.email).eq('role', params.role).is('accepted_at', null);
 	await deleteUnconfirmedAuthUser(params.email);
 
+	const invitedUserId = await sendStaffInvite(params.email, params.role, params.redirectTo);
+	await stampPendingStaffRole(invitedUserId, params.role);
+
 	const { error: inviteError } = await adminSupabase.from('invites').insert({
 		email: params.email,
 		role: params.role,
@@ -286,16 +285,14 @@ async function createOrRefreshStaffAccess(params: {
 	});
 
 	if (inviteError) {
+		await adminSupabase.auth.admin.deleteUser(invitedUserId);
 		throw new Error(inviteError.message);
 	}
-
-	const inviteLinkData = await generateInviteLink(params.email, params.redirectTo);
-	await stampPendingStaffRole(inviteLinkData.userId, params.role);
 
 	if (shouldSyncGuideProfile) {
 		try {
 			await syncGuideProfile({
-				userId: inviteLinkData.userId,
+				userId: invitedUserId,
 				email: params.email,
 				guideName: params.guideName,
 				guideTitle: params.guideTitle,
@@ -303,20 +300,14 @@ async function createOrRefreshStaffAccess(params: {
 			});
 		} catch (guideError) {
 			await adminSupabase.from('invites').delete().eq('email', params.email).eq('role', params.role).is('accepted_at', null);
-			await adminSupabase.auth.admin.deleteUser(inviteLinkData.userId);
+			await adminSupabase.auth.admin.deleteUser(invitedUserId);
 			throw guideError;
 		}
 	}
 
 	return {
 		success: true,
-		message:
-			params.role === 'moderator'
-				? `Invite prepared for ${params.email}. They will be assigned moderator access when they finish setup.`
-				: `Invite prepared for ${params.email}. They will finish guide setup from the secure link.`,
-		inviteLink: inviteLinkData.link,
-		inviteEmail: params.email,
-		inviteRole: params.role
+		message: `Invite emailed to ${params.email}.`
 	};
 }
 
@@ -578,10 +569,7 @@ export const actions: Actions = {
 
 			return {
 				success: true,
-				message: result.message,
-				inviteLink: result.inviteLink,
-				inviteEmail: result.inviteEmail,
-				inviteRole: result.inviteRole
+				message: result.message
 			};
 		} catch (error) {
 			return fail(500, {
@@ -624,10 +612,7 @@ export const actions: Actions = {
 
 			return {
 				success: true,
-				message: result.message.replace('Invite prepared', 'Invite link refreshed'),
-				inviteLink: result.inviteLink,
-				inviteEmail: result.inviteEmail,
-				inviteRole: result.inviteRole
+				message: result.alreadyRegistered ? result.message : `Invite emailed to ${email}.`
 			};
 		} catch (error) {
 			return fail(500, {

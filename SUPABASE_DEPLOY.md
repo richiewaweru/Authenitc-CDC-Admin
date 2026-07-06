@@ -1,6 +1,6 @@
 # Supabase Function Deployment
 
-This project currently needs the remote `admin-invite-staff` Edge Function deployed before Milestone 3 can be fully verified.
+This project currently needs the remote `admin-invite-staff` Edge Function deployed before staff invite email delivery can be fully verified.
 
 ## Option 1: CLI Deploy
 
@@ -30,7 +30,7 @@ Use this when CLI auth is unavailable in the current environment.
 Verify these flows in the admin app:
 
 1. Open `/guides`.
-2. Create a guide invite and confirm the UI shows a copyable invite link.
+2. Create a guide invite and confirm the recipient receives the invite email.
 3. Open `/team`.
-4. Create or refresh a moderator or guide invite and confirm the UI shows a copyable invite link there too.
+4. Create or refresh a moderator or guide invite and confirm a fresh invite email is sent.
 5. If guide creation succeeds, continue the Milestone 3 CRUD checks and update `VERIFICATION.md`.
