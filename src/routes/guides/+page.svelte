@@ -15,6 +15,7 @@
 	let title = $state('Community Guide');
 	let email = $state('');
 	let avatarUrl = $state('');
+	let bio = $state('');
 	let isActive = $state(true);
 	let saveError = $state('');
 	let deleteError = $state('');
@@ -23,12 +24,6 @@
 	let toastMessage = $state('');
 	let toastTone = $state<'success' | 'error'>('success');
 	let toastVisible = $state(false);
-	let inviteDelivery = $state<{
-		email: string;
-		role: 'guide';
-		link: string;
-		message: string;
-	} | null>(null);
 
 	function openCreatePanel() {
 		editingGuideId = '';
@@ -36,6 +31,7 @@
 		title = 'Community Guide';
 		email = '';
 		avatarUrl = '';
+		bio = '';
 		isActive = true;
 		saveError = '';
 		panelOpen = true;
@@ -47,6 +43,7 @@
 		title = guide.title ?? 'Community Guide';
 		email = guide.email ?? '';
 		avatarUrl = guide.avatar_url ?? '';
+		bio = guide.bio ?? '';
 		isActive = guide.is_active;
 		saveError = '';
 		panelOpen = true;
@@ -65,15 +62,6 @@
 		setTimeout(() => {
 			toastVisible = false;
 		}, 4000);
-	}
-
-	async function copyInviteLink(link: string) {
-		try {
-			await navigator.clipboard.writeText(link);
-			showToast('Invite link copied.');
-		} catch {
-			showToast('Could not copy the invite link automatically.', 'error');
-		}
 	}
 
 	function accountStateLabel(state: GuideRow['accountState']) {
@@ -110,18 +98,7 @@
 			if (result.type === 'success') {
 				await update();
 				closePanel();
-
-				if (result.data?.inviteLink && result.data?.inviteEmail) {
-					inviteDelivery = {
-						email: result.data.inviteEmail,
-						role: 'guide',
-						link: result.data.inviteLink,
-						message: result.data.message ?? 'Invite link ready.'
-					};
-					showToast('Guide invite link is ready.');
-				} else {
-					showToast(result.data?.message ?? 'Guide saved.');
-				}
+				showToast(result.data?.message ?? 'Guide saved.');
 				return;
 			}
 
@@ -213,38 +190,6 @@
 					<li>{issue}</li>
 				{/each}
 			</ul>
-		</div>
-	{/if}
-
-	{#if inviteDelivery}
-		<div class="shell-card space-y-4 border-primary/20 bg-success/55">
-			<div class="space-y-1">
-				<p class="section-eyebrow text-primary-dark">Guide Invite Ready</p>
-				<h2 class="font-display text-2xl font-semibold text-primary-dark">{inviteDelivery.message}</h2>
-				<p class="text-sm text-primary-dark/80">
-					Send this secure setup link to <span class="font-semibold">{inviteDelivery.email}</span>. They
-					can use it once to set their password and finish guide onboarding.
-				</p>
-			</div>
-
-			<div class="rounded-[24px] border border-primary/15 bg-white/80 p-4">
-				<p class="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-on-surface-variant">
-					Invite link
-				</p>
-				<textarea class="input-base min-h-28 resize-y text-xs leading-6" readonly value={inviteDelivery.link}></textarea>
-			</div>
-
-			<div class="flex flex-wrap gap-3">
-				<button type="button" class="button-primary" onclick={() => inviteDelivery && copyInviteLink(inviteDelivery.link)}>
-					Copy link
-				</button>
-				<a class="button-secondary" href={inviteDelivery.link} target="_blank" rel="noreferrer">
-					Open link
-				</a>
-				<button type="button" class="button-secondary" onclick={() => (inviteDelivery = null)}>
-					Dismiss
-				</button>
-			</div>
 		</div>
 	{/if}
 
@@ -606,6 +551,21 @@
 				/>
 			</div>
 
+			<div class="space-y-2">
+				<div class="flex items-center justify-between gap-3">
+					<label class="text-sm font-semibold text-on-surface" for="bio">Community Bio</label>
+					<span class="text-xs text-on-surface-variant">{bio.length}/600</span>
+				</div>
+				<textarea
+					id="bio"
+					name="bio"
+					class="input-base min-h-32"
+					bind:value={bio}
+					maxlength="600"
+					placeholder="A short public bio members will see in Guide Corner"
+				></textarea>
+			</div>
+
 			<div class="rounded-[24px] border border-sand bg-background p-4">
 				<div class="flex items-start justify-between gap-4">
 					<div class="space-y-1">
@@ -640,6 +600,9 @@
 						<p class="text-sm font-semibold text-on-surface">{displayName || 'Guide preview'}</p>
 						<p class="text-sm text-on-surface-variant">{title || 'Community Guide'}</p>
 						<p class="text-xs text-on-surface-variant">{email || 'No email yet'}</p>
+						{#if bio}
+							<p class="max-w-sm text-xs leading-5 text-on-surface-variant">{bio}</p>
+						{/if}
 					</div>
 				</div>
 			</div>

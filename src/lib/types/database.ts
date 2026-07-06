@@ -75,6 +75,7 @@ export type Database = {
 					title: string | null;
 					avatar_url: string | null;
 					initials: string | null;
+					bio: string | null;
 					is_active: boolean;
 					created_at: string | null;
 					updated_at: string | null;
@@ -89,6 +90,7 @@ export type Database = {
 					title?: string | null;
 					avatar_url?: string | null;
 					initials?: string | null;
+					bio?: string | null;
 					is_active?: boolean;
 					created_at?: string | null;
 					updated_at?: string | null;
@@ -102,10 +104,114 @@ export type Database = {
 					title?: string | null;
 					avatar_url?: string | null;
 					initials?: string | null;
+					bio?: string | null;
 					is_active?: boolean;
 					created_at?: string | null;
 					updated_at?: string | null;
 					created_by?: string | null;
+				};
+				Relationships: [];
+			};
+			community_events: {
+				Row: {
+					id: string;
+					title: string;
+					description: string | null;
+					event_date: string;
+					duration_minutes: number;
+					location: string | null;
+					meeting_link: string | null;
+					cover_image_url: string | null;
+					published: boolean;
+					created_by: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					title: string;
+					description?: string | null;
+					event_date: string;
+					duration_minutes?: number;
+					location?: string | null;
+					meeting_link?: string | null;
+					cover_image_url?: string | null;
+					published?: boolean;
+					created_by?: string | null;
+				};
+				Update: {
+					title?: string;
+					description?: string | null;
+					event_date?: string;
+					duration_minutes?: number;
+					location?: string | null;
+					meeting_link?: string | null;
+					cover_image_url?: string | null;
+					published?: boolean;
+				};
+				Relationships: [];
+			};
+			community_readings: {
+				Row: {
+					id: string;
+					title: string;
+					body: string | null;
+					external_url: string | null;
+					category: ReadingCategory;
+					published: boolean;
+					published_at: string | null;
+					created_by: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					title: string;
+					body?: string | null;
+					external_url?: string | null;
+					category?: ReadingCategory;
+					published?: boolean;
+					created_by?: string | null;
+				};
+				Update: {
+					title?: string;
+					body?: string | null;
+					external_url?: string | null;
+					category?: ReadingCategory;
+					published?: boolean;
+				};
+				Relationships: [];
+			};
+			announcements: {
+				Row: {
+					id: string;
+					title: string;
+					body: string;
+					tone: AnnouncementTone;
+					published: boolean;
+					pinned: boolean;
+					expires_at: string | null;
+					created_by: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					title: string;
+					body: string;
+					tone?: AnnouncementTone;
+					published?: boolean;
+					pinned?: boolean;
+					expires_at?: string | null;
+					created_by?: string | null;
+				};
+				Update: {
+					title?: string;
+					body?: string;
+					tone?: AnnouncementTone;
+					published?: boolean;
+					pinned?: boolean;
+					expires_at?: string | null;
 				};
 				Relationships: [];
 			};
@@ -349,8 +455,10 @@ export type Database = {
 };
 
 export type AppRole = 'admin' | 'moderator' | 'guide' | 'member';
+export type AnnouncementTone = 'info' | 'celebration' | 'reminder' | 'alert';
 export type BookingStatus = 'confirmed' | 'completed' | 'cancelled' | 'no_show';
 export type PaymentStatus = 'pending' | 'paid' | 'refunded' | 'failed';
+export type ReadingCategory = 'Faith' | 'Relationships' | 'Community' | 'General';
 export type SlotStatus = 'open' | 'booked' | 'completed' | 'cancelled' | 'expired';
 export type UserState =
 	| 'authenticated'

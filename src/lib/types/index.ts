@@ -2,13 +2,24 @@ import type { User } from '@supabase/supabase-js';
 
 import type { AppRole } from './database';
 
-export type { AppRole, BookingStatus, Database, PaymentStatus, UserState } from './database';
+export type {
+	AnnouncementTone,
+	AppRole,
+	BookingStatus,
+	Database,
+	PaymentStatus,
+	ReadingCategory,
+	UserState
+} from './database';
 
 export type StaffRole = Exclude<AppRole, 'member'>;
 export type LayoutMode = 'app' | 'plain';
 export type NavIconName =
 	| 'home'
 	| 'guides'
+	| 'events'
+	| 'readings'
+	| 'announcements'
 	| 'slots'
 	| 'bookings'
 	| 'members'
@@ -49,6 +60,27 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
 		icon: 'guides',
 		roles: ['admin', 'moderator'],
 		description: 'Manage guide profiles'
+	},
+	{
+		label: 'Events',
+		href: '/events',
+		icon: 'events',
+		roles: ['admin', 'moderator', 'guide'],
+		description: 'Community events and gatherings'
+	},
+	{
+		label: 'Readings',
+		href: '/readings',
+		icon: 'readings',
+		roles: ['admin', 'moderator'],
+		description: 'Foundations content for members'
+	},
+	{
+		label: 'Announcements',
+		href: '/announcements',
+		icon: 'announcements',
+		roles: ['admin', 'moderator'],
+		description: 'Community notices and updates'
 	},
 	{
 		label: 'Slots',

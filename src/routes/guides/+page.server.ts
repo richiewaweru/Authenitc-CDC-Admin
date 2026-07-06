@@ -16,9 +16,6 @@ type InviteFunctionResponse = {
 	success?: boolean;
 	message?: string;
 	error?: string;
-	inviteLink?: string;
-	inviteEmail?: string;
-	inviteRole?: 'guide' | 'moderator';
 };
 type GuideSummaryRow = Pick<
 	GuideProfileRow,
@@ -219,7 +216,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		locals.supabase
 			.from('guide_profiles')
 			.select(
-				'id, user_id, email, name, display_name, title, avatar_url, initials, is_active, created_at, updated_at, created_by'
+				'id, user_id, email, name, display_name, title, avatar_url, initials, bio, is_active, created_at, updated_at, created_by'
 			)
 			.order('is_active', { ascending: false })
 			.order('updated_at', { ascending: false, nullsFirst: false })
@@ -371,19 +368,27 @@ export const actions: Actions = {
 		const title = formData.get('title')?.toString().trim() || 'Community Guide';
 		const email = normalizeEmail(formData.get('email')?.toString() ?? null);
 		const avatarUrl = formData.get('avatarUrl')?.toString().trim() || null;
+		const bio = formData.get('bio')?.toString().trim() || null;
 		const isActive = formData.get('isActive') === 'on';
 
 		if (!displayName) {
 			return fail(400, {
 				message: 'Guide name is required.',
-				values: { guideId, displayName, title, email: email ?? '', avatarUrl: avatarUrl ?? '', isActive }
+				values: { guideId, displayName, title, email: email ?? '', avatarUrl: avatarUrl ?? '', bio: bio ?? '', isActive }
+			});
+		}
+
+		if (bio && bio.length > 600) {
+			return fail(400, {
+				message: 'Community bio must be 600 characters or fewer.',
+				values: { guideId, displayName, title, email: email ?? '', avatarUrl: avatarUrl ?? '', bio, isActive }
 			});
 		}
 
 		if (email && !EMAIL_PATTERN.test(email)) {
 			return fail(400, {
 				message: 'Enter a valid email address.',
-				values: { guideId, displayName, title, email, avatarUrl: avatarUrl ?? '', isActive }
+				values: { guideId, displayName, title, email, avatarUrl: avatarUrl ?? '', bio: bio ?? '', isActive }
 			});
 		}
 
@@ -393,6 +398,7 @@ export const actions: Actions = {
 			title,
 			email,
 			avatar_url: avatarUrl,
+			bio,
 			initials: buildInitials(displayName),
 			is_active: isActive,
 			updated_at: new Date().toISOString()
@@ -404,7 +410,7 @@ export const actions: Actions = {
 			if (error) {
 				return fail(500, {
 					message: error.message,
-					values: { guideId, displayName, title, email: email ?? '', avatarUrl: avatarUrl ?? '', isActive }
+					values: { guideId, displayName, title, email: email ?? '', avatarUrl: avatarUrl ?? '', bio: bio ?? '', isActive }
 				});
 			}
 
@@ -423,7 +429,7 @@ export const actions: Actions = {
 		if (!email) {
 			return fail(400, {
 				message: 'Guide email is required when adding a new guide.',
-				values: { guideId, displayName, title, email: '', avatarUrl: avatarUrl ?? '', isActive }
+				values: { guideId, displayName, title, email: '', avatarUrl: avatarUrl ?? '', bio: bio ?? '', isActive }
 			});
 		}
 
@@ -441,15 +447,12 @@ export const actions: Actions = {
 
 			return {
 				success: true,
-				message: inviteResult?.message ?? `Invite prepared for ${email}.`,
-				inviteLink: inviteResult?.inviteLink,
-				inviteEmail: email,
-				inviteRole: 'guide' as const
+				message: inviteResult?.message ?? `Invite emailed to ${email}.`
 			};
 		} catch (error) {
 			return fail(500, {
 				message: error instanceof Error ? error.message : 'Could not send the guide invite.',
-				values: { guideId, displayName, title, email, avatarUrl: avatarUrl ?? '', isActive }
+				values: { guideId, displayName, title, email, avatarUrl: avatarUrl ?? '', bio: bio ?? '', isActive }
 			});
 		}
 
