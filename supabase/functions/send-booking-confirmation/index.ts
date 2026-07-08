@@ -34,6 +34,10 @@ function getRequiredEnv(name: string): string {
 	return value;
 }
 
+function getRequiredBaseUrl(name: string): string {
+	return getRequiredEnv(name).replace(/\/+$/, '');
+}
+
 async function sendTemplatedEmail(params: {
 	to: string;
 	subject: string;
@@ -136,8 +140,8 @@ Deno.serve(async (req: Request) => {
 				? await adminClient.from('profiles').select('id, email, first_name, display_name').in('id', staffIds)
 				: { data: [] as Array<{ id: string; email: string | null; first_name?: string | null; display_name: string | null }> };
 
-		const adminPanelUrl = Deno.env.get('ADMIN_APP_URL') ?? 'https://authenitc-cdc-admin.vercel.app';
-		const bookingUrl = `${adminPanelUrl.replace(/\/+$/, '')}/bookings?booking=${payload.bookingId}`;
+		const adminPanelUrl = getRequiredBaseUrl('ADMIN_APP_URL');
+		const bookingUrl = `${adminPanelUrl}/bookings?booking=${payload.bookingId}`;
 
 		for (const staff of staffProfiles ?? []) {
 			if (!staff.email) {

@@ -34,6 +34,10 @@ function getRequiredEnv(name: string): string {
 	return value;
 }
 
+function getRequiredBaseUrl(name: string): string {
+	return getRequiredEnv(name).replace(/\/+$/, '');
+}
+
 async function sendTemplatedEmail(params: {
 	to: string;
 	subject: string;
@@ -121,6 +125,8 @@ Deno.serve(async (req: Request) => {
 					console.log('[Email] No TEMPLATE_MEMBER_CANCELLED set — skipping cancellation email');
 					return jsonResponse({ sent: false, reason: 'no template configured' });
 				}
+
+				variables.bookNewTimeUrl = getRequiredBaseUrl('CONSUMER_APP_URL');
 				break;
 
 			default:
@@ -149,8 +155,7 @@ Deno.serve(async (req: Request) => {
 					.in('role', ['admin', 'moderator'])
 					.neq('suspended', true);
 
-				const adminPanelUrl =
-					Deno.env.get('ADMIN_APP_URL') ?? 'https://authenitc-cdc-admin.vercel.app';
+				const adminPanelUrl = getRequiredBaseUrl('ADMIN_APP_URL');
 
 				for (const staff of staffProfiles ?? []) {
 					if (!staff.email) {

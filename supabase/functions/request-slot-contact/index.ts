@@ -46,6 +46,10 @@ function getRequiredEnv(name: string): string {
 	return value;
 }
 
+function getRequiredBaseUrl(name: string): string {
+	return getRequiredEnv(name).replace(/\/+$/, '');
+}
+
 function truncate(value: string, maxLength: number) {
 	return value.length > maxLength ? value.slice(0, maxLength) : value;
 }
@@ -270,8 +274,8 @@ Deno.serve(async (req: Request) => {
 			return jsonResponse({ error: 'Could not load staff profiles' }, 500);
 		}
 
-		const adminPanelUrl = Deno.env.get('ADMIN_APP_URL') ?? 'https://authenitc-cdc-admin.vercel.app';
-		const memberProfileUrl = `${adminPanelUrl.replace(/\/+$/, '')}/members/${memberProfile.id}`;
+		const adminPanelUrl = getRequiredBaseUrl('ADMIN_APP_URL');
+		const memberProfileUrl = `${adminPanelUrl}/members/${memberProfile.id}`;
 		const memberName = getProfileLabel(memberProfile);
 		const memberFirstName = getFirstName(memberProfile);
 		const notificationDetail = `${memberName} requested a time: ${preferredWindows}`;
