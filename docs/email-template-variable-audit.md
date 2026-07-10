@@ -12,6 +12,30 @@ Method: Mixed: Resend Templates API for hosted Resend HTML/text; Supabase Manage
 - WARN issues: 0
 - INFO flags: 7
 
+## Post-fix verification
+Live Resend templates were patched and published on 2026-07-10 to standardize uppercase text-body tokens to the camelCase names sent by the Edge Functions.
+
+Verification result after patch:
+- CRITICAL issues: 0
+- WARN issues: 2
+- Remaining warnings:
+  - `TEMPLATE_STAFF_TIME_REQUEST` / `new-time-request`: code still passes `firstName`, but the template does not reference it.
+  - `TEMPLATE_MEMBER_REMINDER_24H` / `member-reminder-24h`: code still passes `meetingLink`, but the template does not reference it.
+- INFO flags still require rendered-email click testing for href-embedded variables.
+
+Patched live Resend templates:
+- `welcome-email`: `FIRSTNAME` -> `firstName`
+- `alignment-profile`: `FIRSTNAME` -> `firstName`
+- `alignment-conversation`: `FIRSTNAME` -> `firstName`
+- `booking-cancelled`: `FIRSTNAME` -> `firstName`
+- `member-alignment-ready`: `FIRSTNAME` -> `firstName`
+- `conversation-booked`: `FIRSTNAME` -> `firstName`
+- `new-booking-notification`: `FIRSTNAME` -> `firstName`
+- `new-time-request`: `MEMBERNAME` -> `memberName`
+- `alignment-conversation-4`: `FIRSTNAME` -> `firstName`
+- `member-reminder-24h`: `FIRSTNAME` -> `firstName`
+- `member-reminder-1h`: `FIRSTNAME` -> `firstName`
+
 ## Critical issues (will cause runtime failures)
 | Surface | Template/code path | Issue | Recommended fix |
 |---|---|---|---|
