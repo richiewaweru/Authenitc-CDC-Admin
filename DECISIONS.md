@@ -157,3 +157,15 @@
 - Decision: Extend local generated database types with `available_slots.meeting_link`.
 - Why: The applied migration added the column, but the checked-in type file only modeled `bookings.meeting_link`, which would otherwise reject slot inserts and updates at compile time.
 - Docs said: `phase3_slot_meeting_link.sql` has already been run, so app code should target the repaired schema.
+
+## 2026-07-10
+
+### Email redirect link audit
+- Decision: Update and publish the live Resend hosted templates that still linked to `https://authentic-cdc.vercel.app`.
+- Why: The Resend dashboard/API audit found old consumer-domain CTAs in both HTML and plain-text bodies for `booking-cancelled`, `payment-failed`, `payment-confirmation`, `member-reminder-24h`, `alignment-profile`, and `welcome-email`. `booking-cancelled` now uses the injected `{{{bookNewTimeUrl}}}` variable from `CONSUMER_APP_URL`; the other affected consumer CTAs now point at `https://app.authenticcdc.com`.
+- Docs said: Remove old Vercel URLs from rendered outbound email links, keep variable-driven links where the Edge Functions already build the correct destination, and verify hosted template HTML rather than relying only on checked-in copies.
+
+### Resend API variable syntax
+- Decision: Normalize the checked-in `member-booking-cancelled` template copy to Resend API triple-brace variables.
+- Why: The live Resend template update API rejected double-brace variables and required the variables used in edited HTML to be declared. The published live `booking-cancelled` template now uses `{{{bookNewTimeUrl}}}`, matching the checked-in copy's intended variable-driven destination.
+- Docs said: Repository email-template copies should track live hosted template behavior closely enough that future edits do not reintroduce dashboard/API drift.

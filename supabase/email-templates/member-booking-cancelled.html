@@ -1,7 +1,7 @@
 <!--
   TEMPLATE: member-booking-cancelled
   Resend template name: member-booking-cancelled
-  VARIABLES: {{firstName}}, {{guideName}}, {{slotDate}}, {{slotTime}}, {{bookNewTimeUrl}}
+  VARIABLES: {{{firstName}}}, {{{guideName}}}, {{{slotDate}}}, {{{slotTime}}}, {{{bookNewTimeUrl}}}
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -19,11 +19,11 @@
       <tr>
         <td style="padding:32px;">
           <h1 style="margin:0 0 8px;font-family:Georgia,serif;font-size:24px;color:#082717;">
-            Your booking has been cancelled, {{firstName}}.
+            Your booking has been cancelled, {{{firstName}}}.
           </h1>
           <p style="margin:0 0 24px;font-size:14px;color:#424843;line-height:1.6;">
-            Your Alignment Conversation with <strong>{{guideName}}</strong>
-            on <strong>{{slotDate}}</strong> at <strong>{{slotTime}}</strong>
+            Your Alignment Conversation with <strong>{{{guideName}}}</strong>
+            on <strong>{{{slotDate}}}</strong> at <strong>{{{slotTime}}}</strong>
             has been cancelled.
           </p>
           <p style="margin:0 0 24px;font-size:14px;color:#424843;line-height:1.6;">
@@ -32,7 +32,7 @@
           <table cellpadding="0" cellspacing="0">
             <tr>
               <td style="background:#1F3D2B;border-radius:10px;padding:12px 28px;">
-                <a href="{{bookNewTimeUrl}}" style="color:#FFFFFF;font-size:15px;font-weight:bold;text-decoration:none;">
+                <a href="{{{bookNewTimeUrl}}}" style="color:#FFFFFF;font-size:15px;font-weight:bold;text-decoration:none;">
                   Book a new time &rarr;
                 </a>
               </td>
