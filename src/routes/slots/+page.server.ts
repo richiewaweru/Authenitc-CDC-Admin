@@ -616,6 +616,9 @@ export const actions: Actions = {
 		const slotTime = normalizeTimeKey(formData.get('slotTime')?.toString().trim() ?? null);
 		const duration = normalizeEditDuration(formData.get('durationMinutes')?.toString() ?? null);
 		const meetingLink = normalizeMeetingLink(formData.get('meetingLink'));
+		const currentWeek = formData.get('currentWeek')?.toString().trim() ?? '';
+		const currentView = normalizeView(formData.get('currentView')?.toString().trim() ?? null);
+		const currentGuide = normalizeGuideFilter(formData.get('currentGuide')?.toString().trim() ?? null);
 		const parsedDate = parseDateKey(slotDate);
 
 		if (!slotId) {
@@ -701,6 +704,18 @@ export const actions: Actions = {
 
 		if (updateError) {
 			return fail(500, { message: updateError.message });
+		}
+
+		const newWeekStart = formatDateKey(startOfWeek(parsedDate));
+
+		if (currentWeek && currentWeek !== newWeekStart) {
+			const params = new URLSearchParams({ week: newWeekStart, view: currentView });
+
+			if (currentGuide !== 'all') {
+				params.set('guide', currentGuide);
+			}
+
+			throw redirect(303, `/slots?${params.toString()}`);
 		}
 
 		return {

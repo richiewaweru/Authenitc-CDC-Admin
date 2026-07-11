@@ -938,6 +938,9 @@
 
 		<form method="POST" action="?/updateSlot" class="mt-8 space-y-5" use:enhance={editSlotEnhance}>
 			<input type="hidden" name="slotId" value={selectedSlot.id} />
+			<input type="hidden" name="currentWeek" value={data.week.start} />
+			<input type="hidden" name="currentView" value={data.filters.view} />
+			<input type="hidden" name="currentGuide" value={data.filters.guide} />
 
 			{#if editSlotError}
 				<div class="rounded-2xl border border-red-200 bg-error px-4 py-3 text-sm font-medium text-error-strong">
