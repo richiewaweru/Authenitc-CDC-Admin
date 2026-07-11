@@ -57,9 +57,9 @@ interface ExpoMessage {
 	priority?: 'high';
 }
 
-async function sendExpoPush(messages: ExpoMessage[]): Promise<void> {
+async function sendExpoPush(messages: ExpoMessage[]): Promise<boolean> {
 	if (messages.length === 0) {
-		return;
+		return true;
 	}
 
 	const res = await fetch(EXPO_PUSH_URL, {
@@ -70,7 +70,10 @@ async function sendExpoPush(messages: ExpoMessage[]): Promise<void> {
 
 	if (!res.ok) {
 		console.error('[Push] Expo error:', await res.text());
+		return false;
 	}
+
+	return true;
 }
 
 async function sendTemplatedEmail(params: {
@@ -78,7 +81,7 @@ async function sendTemplatedEmail(params: {
 	subject: string;
 	templateId: string;
 	variables: Record<string, string>;
-}): Promise<void> {
+}): Promise<boolean> {
 	const apiKey = getRequiredEnv('RESEND_API_KEY');
 	const fromEmail = Deno.env.get('FROM_EMAIL') ?? 'onboarding@resend.dev';
 
@@ -101,7 +104,10 @@ async function sendTemplatedEmail(params: {
 
 	if (!res.ok) {
 		console.error(`[Email] Failed to send to ${params.to}:`, await res.text());
+		return false;
 	}
+
+	return true;
 }
 
 Deno.serve(async (req: Request) => {
@@ -130,12 +136,12 @@ Deno.serve(async (req: Request) => {
 
 		const bookingSelect = `
       id, user_id, meeting_link,
-      available_slots!slot_id ( starts_at, slot_date, slot_time ),
+      available_slots!slot_id!inner ( starts_at, slot_date, slot_time ),
       profiles!user_id        ( email, first_name, display_name, expo_push_token ),
       guide_profiles!guide_id ( display_name, name )
     `;
 
-		const { data: rows24h } = await supabase
+		const { data: rows24h, error: rows24hError } = await supabase
 			.from('bookings')
 			.select(bookingSelect)
 			.eq('status', 'confirmed')
@@ -143,7 +149,11 @@ Deno.serve(async (req: Request) => {
 			.gte('available_slots.starts_at', in24h.toISOString())
 			.lte('available_slots.starts_at', in25h.toISOString());
 
-		const { data: rows1h } = await supabase
+		if (rows24hError) {
+			throw rows24hError;
+		}
+
+		const { data: rows1h, error: rows1hError } = await supabase
 			.from('bookings')
 			.select(bookingSelect)
 			.eq('status', 'confirmed')
@@ -151,32 +161,41 @@ Deno.serve(async (req: Request) => {
 			.gte('available_slots.starts_at', in1h.toISOString())
 			.lte('available_slots.starts_at', in75m.toISOString());
 
-		const pushMsgs24h: ExpoMessage[] = [];
+		if (rows1hError) {
+			throw rows1hError;
+		}
+
 		const ids24h: string[] = [];
 
 		for (const booking of rows24h ?? []) {
 			const profile = (booking as any).profiles;
 			const guide = (booking as any).guide_profiles;
 			const slot = (booking as any).available_slots;
+			if (!slot?.starts_at) continue;
+
 			const guideName = guide?.display_name ?? guide?.name ?? 'your guide';
 			const firstName = profile?.first_name ?? profile?.display_name?.split(' ')[0] ?? 'there';
 			const slotDate = formatDate(slot?.slot_date);
 			const slotTime = formatTime(slot?.slot_time);
 			const token = profile?.expo_push_token;
+			let pushSent = false;
+			let emailSent = false;
 
 			if (token?.startsWith('ExponentPushToken[')) {
-				pushMsgs24h.push({
-					to: token,
-					title: 'Your Alignment Conversation is Tomorrow',
-					body: `Your conversation with ${guideName} is tomorrow. Open the app to check details.`,
-					sound: 'default',
-					priority: 'high',
-					data: { bookingId: booking.id, type: 'reminder_24h' }
-				});
+				pushSent = await sendExpoPush([
+					{
+						to: token,
+						title: 'Your Alignment Conversation is Tomorrow',
+						body: `Your conversation with ${guideName} is tomorrow. Open the app to check details.`,
+						sound: 'default',
+						priority: 'high',
+						data: { bookingId: booking.id, type: 'reminder_24h' }
+					}
+				]);
 			}
 
 			if (profile?.email) {
-				await sendTemplatedEmail({
+				emailSent = await sendTemplatedEmail({
 					to: profile.email,
 					subject: `Reminder: Your Alignment Conversation is tomorrow at ${slotTime}`,
 					templateId: template24h,
@@ -184,34 +203,41 @@ Deno.serve(async (req: Request) => {
 				});
 			}
 
-			ids24h.push(booking.id);
+			if (pushSent || emailSent) {
+				ids24h.push(booking.id);
+			}
 		}
 
-		const pushMsgs1h: ExpoMessage[] = [];
 		const ids1h: string[] = [];
 
 		for (const booking of rows1h ?? []) {
 			const profile = (booking as any).profiles;
 			const guide = (booking as any).guide_profiles;
 			const slot = (booking as any).available_slots;
+			if (!slot?.starts_at) continue;
+
 			const guideName = guide?.display_name ?? guide?.name ?? 'your guide';
 			const firstName = profile?.first_name ?? profile?.display_name?.split(' ')[0] ?? 'there';
 			const slotTime = formatTime(slot?.slot_time);
 			const token = profile?.expo_push_token;
+			let pushSent = false;
+			let emailSent = false;
 
 			if (token?.startsWith('ExponentPushToken[')) {
-				pushMsgs1h.push({
-					to: token,
-					title: 'Your Alignment Conversation Starts in 1 Hour',
-					body: `Your conversation with ${guideName} starts soon. Open the app to join.`,
-					sound: 'default',
-					priority: 'high',
-					data: { bookingId: booking.id, type: 'reminder_1h' }
-				});
+				pushSent = await sendExpoPush([
+					{
+						to: token,
+						title: 'Your Alignment Conversation Starts in 1 Hour',
+						body: `Your conversation with ${guideName} starts soon. Open the app to join.`,
+						sound: 'default',
+						priority: 'high',
+						data: { bookingId: booking.id, type: 'reminder_1h' }
+					}
+				]);
 			}
 
 			if (profile?.email) {
-				await sendTemplatedEmail({
+				emailSent = await sendTemplatedEmail({
 					to: profile.email,
 					subject: `Your Alignment Conversation starts in 1 hour — ${slotTime}`,
 					templateId: template1h,
@@ -219,11 +245,10 @@ Deno.serve(async (req: Request) => {
 				});
 			}
 
-			ids1h.push(booking.id);
+			if (pushSent || emailSent) {
+				ids1h.push(booking.id);
+			}
 		}
-
-		await sendExpoPush(pushMsgs24h);
-		await sendExpoPush(pushMsgs1h);
 
 		if (ids24h.length > 0) {
 			await supabase.from('bookings').update({ reminder_24h_sent: true }).in('id', ids24h);
@@ -234,7 +259,7 @@ Deno.serve(async (req: Request) => {
 		}
 
 		console.log(
-			`[Reminder] 24h: ${pushMsgs24h.length} push + ${ids24h.length} email | 1h: ${pushMsgs1h.length} push + ${ids1h.length} email`
+			`[Reminder] 24h: ${ids24h.length} sent | 1h: ${ids1h.length} sent`
 		);
 
 		return jsonResponse({ sent_24h: ids24h.length, sent_1h: ids1h.length });
