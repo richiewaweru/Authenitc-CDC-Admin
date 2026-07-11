@@ -10,6 +10,14 @@ node_modules
 /.svelte-kit
 /build
 /dist
+/artifacts
+
+# Local context notes
+/docs
+/DECISIONS.md
+/MILESTONES.md
+/SUPABASE_DEPLOY.md
+/VERIFICATION.md
 
 # OS
 .DS_Store
