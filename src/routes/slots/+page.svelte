@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { applyAction, enhance } from '$app/forms';
+	import SlotActionsMenu from '$lib/components/slots/SlotActionsMenu.svelte';
 	import type { SubmitFunction } from '@sveltejs/kit';
 
 	type CalendarRow = (typeof data.calendarRows)[number];
@@ -23,6 +24,16 @@
 	let selectedTimes = $state<string[]>([]);
 	let customTime = $state('');
 	let excludeWeekends = $state(true);
+	let editSlotPanelOpen = $state(false);
+	let editSlotError = $state('');
+	let editSlotSubmitting = $state(false);
+	let selectedSlot = $state<ListSlot | null>(null);
+	let editSlotDate = $state('');
+	let editSlotTime = $state('');
+	let editSlotDuration = $state('30');
+	let editMeetingLink = $state('');
+	let savedMeetingLinks = $state<Record<string, string | null>>({});
+	let meetingLinkDrafts = $state<Record<string, string>>({});
 	let crossGuideConfirm = $state<{
 		action: CrossGuideAction;
 		slotId: string;
@@ -143,6 +154,40 @@
 		return data.canPublish && (slot.status === 'open' || slot.status === 'cancelled');
 	}
 
+	function displayMeetingLink(slot: ListSlot) {
+		return Object.hasOwn(savedMeetingLinks, slot.id) ? savedMeetingLinks[slot.id] : slot.meetingLink;
+	}
+
+	function meetingLinkValue(slot: ListSlot) {
+		return Object.hasOwn(meetingLinkDrafts, slot.id)
+			? meetingLinkDrafts[slot.id]
+			: (displayMeetingLink(slot) ?? '');
+	}
+
+	function updateMeetingLinkDraft(slotId: string, event: Event) {
+		const input = event.currentTarget;
+		if (input instanceof HTMLInputElement) {
+			meetingLinkDrafts[slotId] = input.value;
+		}
+	}
+
+	function openEditSlotPanel(slot: ListSlot) {
+		selectedSlot = slot;
+		editSlotDate = slot.slotDate;
+		editSlotTime = slot.timeKey;
+		editSlotDuration = `${slot.durationMinutes}`;
+		editMeetingLink = displayMeetingLink(slot) ?? '';
+		editSlotError = '';
+		editSlotPanelOpen = true;
+	}
+
+	function closeEditSlotPanel() {
+		editSlotPanelOpen = false;
+		editSlotError = '';
+		editSlotSubmitting = false;
+		selectedSlot = null;
+	}
+
 	function showToast(message: string, tone: 'success' | 'error' = 'success') {
 		toastMessage = message;
 		toastTone = tone;
@@ -208,6 +253,28 @@
 		};
 	};
 
+	const editSlotEnhance: SubmitFunction = () => {
+		editSlotSubmitting = true;
+		editSlotError = '';
+
+		return async ({ result, update }) => {
+			editSlotSubmitting = false;
+
+			if (result.type === 'success') {
+				await update();
+				closeEditSlotPanel();
+				showToast(result.data?.message ?? 'Slot updated.');
+				return;
+			}
+
+			await applyAction(result);
+			editSlotError =
+				result.type === 'failure'
+					? result.data?.message ?? 'Could not update this slot.'
+					: 'Something went wrong while updating this slot.';
+		};
+	};
+
 	function cancelCrossGuideConfirm() {
 		crossGuideConfirm = null;
 		confirmedCrossGuideActionKey = null;
@@ -254,6 +321,14 @@
 				}
 
 				if (result.type === 'success') {
+					if (loadingLabel === 'meeting-link') {
+						const nextLink =
+							result.data && 'meetingLink' in result.data
+								? (result.data.meetingLink as string | null)
+								: null;
+						savedMeetingLinks[slot.id] = nextLink;
+						meetingLinkDrafts[slot.id] = nextLink ?? '';
+					}
 					await update();
 					showToast(result.data?.message ?? 'Slot updated.');
 					return;
@@ -464,43 +539,13 @@
 								</div>
 							</div>
 
-							{#if canMutateSlot(slot)}
-								<div class="flex flex-wrap gap-2">
-									{#if slot.status === 'open'}
-										<form
-											method="POST"
-											action="?/updateSlotStatus"
-											use:enhance={slotActionEnhance(slot, 'cancel', 'cancel')}
-										>
-											<input type="hidden" name="slotId" value={slot.id} />
-											<input type="hidden" name="status" value="cancelled" />
-											<button
-												type="submit"
-												class="button-secondary text-xs"
-												disabled={slotActionSubmitting === `${slot.id}:cancel`}
-											>
-												{slotActionSubmitting === `${slot.id}:cancel` ? 'Saving...' : 'Cancel'}
-											</button>
-										</form>
-									{:else}
-										<form
-											method="POST"
-											action="?/updateSlotStatus"
-											use:enhance={slotActionEnhance(slot, 'reopen', 'reopen')}
-										>
-											<input type="hidden" name="slotId" value={slot.id} />
-											<input type="hidden" name="status" value="open" />
-											<button
-												type="submit"
-												class="button-secondary text-xs"
-												disabled={slotActionSubmitting === `${slot.id}:reopen`}
-											>
-												{slotActionSubmitting === `${slot.id}:reopen` ? 'Saving...' : 'Reopen'}
-											</button>
-										</form>
-									{/if}
-								</div>
-							{/if}
+							<SlotActionsMenu
+								{slot}
+								canMutate={canMutateSlot(slot)}
+								submittingKey={slotActionSubmitting}
+								{slotActionEnhance}
+								onEdit={openEditSlotPanel}
+							/>
 						</div>
 
 						<div class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -527,7 +572,8 @@
 									<input
 										type="url"
 										name="meetingLink"
-										value={slot.meetingLink ?? ''}
+										value={meetingLinkValue(slot)}
+										oninput={(event) => updateMeetingLinkDraft(slot.id, event)}
 										placeholder="Paste Google Meet, Zoom, or Teams link..."
 										class="input-base flex-1 text-sm"
 									/>
@@ -539,14 +585,14 @@
 										{slotActionSubmitting === `${slot.id}:meeting-link` ? 'Saving...' : 'Save'}
 									</button>
 								</form>
-								{#if slot.meetingLink}
+								{#if displayMeetingLink(slot)}
 									<a
-										href={slot.meetingLink}
+										href={displayMeetingLink(slot) ?? ''}
 										target="_blank"
 										rel="noreferrer"
-										class="mt-1.5 block text-xs text-primary underline"
+										class="mt-1.5 block break-all text-xs text-primary underline"
 									>
-										Test link ->
+										{displayMeetingLink(slot)}
 									</a>
 								{/if}
 							</div>
@@ -554,23 +600,6 @@
 
 						<div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
 							<span>{slot.durationMinutes} min</span>
-							{#if canMutateSlot(slot)}
-								<span>|</span>
-								<form
-									method="POST"
-									action="?/deleteSlot"
-									use:enhance={slotActionEnhance(slot, 'remove', 'delete')}
-								>
-									<input type="hidden" name="slotId" value={slot.id} />
-									<button
-										type="submit"
-										class="text-sm font-semibold text-error-strong"
-										disabled={slotActionSubmitting === `${slot.id}:remove`}
-									>
-										{slotActionSubmitting === `${slot.id}:remove` ? 'Removing...' : 'Remove slot'}
-									</button>
-								</form>
-							{/if}
 						</div>
 					</div>
 				{/each}
@@ -607,9 +636,18 @@
 											<div class="rounded-[22px] border border-sand bg-background p-3 shadow-[0_8px_20px_rgba(8,39,23,0.06)]">
 												<div class="flex items-start justify-between gap-2">
 													<p class="text-sm font-semibold text-on-surface">{item.timeLabel}</p>
-													<span class={`badge ${statusToneClass(item.statusTone)}`}>
-														{statusLabel(item.status)}
-													</span>
+													<div class="flex items-center gap-2">
+														<span class={`badge ${statusToneClass(item.statusTone)}`}>
+															{statusLabel(item.status)}
+														</span>
+														<SlotActionsMenu
+															slot={item}
+															canMutate={canMutateSlot(item)}
+															submittingKey={slotActionSubmitting}
+															{slotActionEnhance}
+															onEdit={openEditSlotPanel}
+														/>
+													</div>
 												</div>
 												<div class="mt-3 space-y-1 text-xs leading-6 text-on-surface-variant">
 													{#if showGuideNames()}
@@ -634,7 +672,8 @@
 															<input
 																type="url"
 																name="meetingLink"
-																value={item.meetingLink ?? ''}
+																value={meetingLinkValue(item)}
+																oninput={(event) => updateMeetingLinkDraft(item.id, event)}
 																placeholder="Paste Google Meet, Zoom, or Teams link..."
 																class="input-base text-xs"
 															/>
@@ -646,14 +685,14 @@
 																{slotActionSubmitting === `${item.id}:meeting-link` ? 'Saving...' : 'Save'}
 															</button>
 														</form>
-														{#if item.meetingLink}
+														{#if displayMeetingLink(item)}
 															<a
-																href={item.meetingLink}
+																href={displayMeetingLink(item) ?? ''}
 																target="_blank"
 																rel="noreferrer"
-																class="mt-1.5 block text-xs text-primary underline"
+																class="mt-1.5 block break-all text-xs text-primary underline"
 															>
-																Test link ->
+																{displayMeetingLink(item)}
 															</a>
 														{/if}
 													</div>
@@ -687,43 +726,13 @@
 								</div>
 							</div>
 
-							{#if canMutateSlot(slot)}
-								<div class="flex flex-wrap gap-2">
-									{#if slot.status === 'open'}
-										<form
-											method="POST"
-											action="?/updateSlotStatus"
-											use:enhance={slotActionEnhance(slot, 'cancel', 'cancel')}
-										>
-											<input type="hidden" name="slotId" value={slot.id} />
-											<input type="hidden" name="status" value="cancelled" />
-											<button
-												type="submit"
-												class="button-secondary text-xs"
-												disabled={slotActionSubmitting === `${slot.id}:cancel`}
-											>
-												{slotActionSubmitting === `${slot.id}:cancel` ? 'Saving...' : 'Cancel'}
-											</button>
-										</form>
-									{:else}
-										<form
-											method="POST"
-											action="?/updateSlotStatus"
-											use:enhance={slotActionEnhance(slot, 'reopen', 'reopen')}
-										>
-											<input type="hidden" name="slotId" value={slot.id} />
-											<input type="hidden" name="status" value="open" />
-											<button
-												type="submit"
-												class="button-secondary text-xs"
-												disabled={slotActionSubmitting === `${slot.id}:reopen`}
-											>
-												{slotActionSubmitting === `${slot.id}:reopen` ? 'Saving...' : 'Reopen'}
-											</button>
-										</form>
-									{/if}
-								</div>
-							{/if}
+							<SlotActionsMenu
+								{slot}
+								canMutate={canMutateSlot(slot)}
+								submittingKey={slotActionSubmitting}
+								{slotActionEnhance}
+								onEdit={openEditSlotPanel}
+							/>
 						</div>
 
 						<div class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -750,7 +759,8 @@
 									<input
 										type="url"
 										name="meetingLink"
-										value={slot.meetingLink ?? ''}
+										value={meetingLinkValue(slot)}
+										oninput={(event) => updateMeetingLinkDraft(slot.id, event)}
 										placeholder="Paste Google Meet, Zoom, or Teams link..."
 										class="input-base flex-1 text-sm"
 									/>
@@ -762,14 +772,14 @@
 										{slotActionSubmitting === `${slot.id}:meeting-link` ? 'Saving...' : 'Save'}
 									</button>
 								</form>
-								{#if slot.meetingLink}
+								{#if displayMeetingLink(slot)}
 									<a
-										href={slot.meetingLink}
+										href={displayMeetingLink(slot) ?? ''}
 										target="_blank"
 										rel="noreferrer"
-										class="mt-1.5 block text-xs text-primary underline"
+										class="mt-1.5 block break-all text-xs text-primary underline"
 									>
-										Test link ->
+										{displayMeetingLink(slot)}
 									</a>
 								{/if}
 							</div>
@@ -777,23 +787,6 @@
 
 						<div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
 							<span>{slot.durationMinutes} min</span>
-							{#if canMutateSlot(slot)}
-								<span>|</span>
-								<form
-									method="POST"
-									action="?/deleteSlot"
-									use:enhance={slotActionEnhance(slot, 'remove', 'delete')}
-								>
-									<input type="hidden" name="slotId" value={slot.id} />
-									<button
-										type="submit"
-										class="text-sm font-semibold text-error-strong"
-										disabled={slotActionSubmitting === `${slot.id}:remove`}
-									>
-										{slotActionSubmitting === `${slot.id}:remove` ? 'Removing...' : 'Remove slot'}
-									</button>
-								</form>
-							{/if}
 						</div>
 					</div>
 				{/each}
@@ -862,7 +855,8 @@
 												<input
 													type="url"
 													name="meetingLink"
-													value={slot.meetingLink ?? ''}
+													value={meetingLinkValue(slot)}
+													oninput={(event) => updateMeetingLinkDraft(slot.id, event)}
 													placeholder="Paste Google Meet, Zoom, or Teams link..."
 													class="input-base flex-1 text-sm"
 												/>
@@ -874,14 +868,14 @@
 													{slotActionSubmitting === `${slot.id}:meeting-link` ? 'Saving...' : 'Save'}
 												</button>
 											</form>
-											{#if slot.meetingLink}
+											{#if displayMeetingLink(slot)}
 												<a
-													href={slot.meetingLink}
+													href={displayMeetingLink(slot) ?? ''}
 													target="_blank"
 													rel="noreferrer"
 													class="block text-xs text-primary underline break-all"
 												>
-													{slot.meetingLink}
+													{displayMeetingLink(slot)}
 												</a>
 											{/if}
 										</div>
@@ -903,58 +897,13 @@
 								</td>
 								{#if data.canPublish}
 									<td class="border-b border-sand/80 px-4 py-4">
-										<div class="flex flex-wrap gap-2">
-											{#if slot.status === 'open'}
-												<form
-													method="POST"
-													action="?/updateSlotStatus"
-													use:enhance={slotActionEnhance(slot, 'cancel', 'cancel')}
-												>
-													<input type="hidden" name="slotId" value={slot.id} />
-													<input type="hidden" name="status" value="cancelled" />
-													<button
-														type="submit"
-														class="button-secondary text-xs"
-														disabled={slotActionSubmitting === `${slot.id}:cancel`}
-													>
-														{slotActionSubmitting === `${slot.id}:cancel` ? 'Saving...' : 'Cancel'}
-													</button>
-												</form>
-											{:else if slot.status === 'cancelled'}
-												<form
-													method="POST"
-													action="?/updateSlotStatus"
-													use:enhance={slotActionEnhance(slot, 'reopen', 'reopen')}
-												>
-													<input type="hidden" name="slotId" value={slot.id} />
-													<input type="hidden" name="status" value="open" />
-													<button
-														type="submit"
-														class="button-secondary text-xs"
-														disabled={slotActionSubmitting === `${slot.id}:reopen`}
-													>
-														{slotActionSubmitting === `${slot.id}:reopen` ? 'Saving...' : 'Reopen'}
-													</button>
-												</form>
-											{/if}
-
-											{#if slot.status === 'open' || slot.status === 'cancelled'}
-												<form
-													method="POST"
-													action="?/deleteSlot"
-													use:enhance={slotActionEnhance(slot, 'remove', 'delete')}
-												>
-													<input type="hidden" name="slotId" value={slot.id} />
-													<button
-														type="submit"
-														class="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-error/30 px-4 py-2.5 text-xs font-semibold text-error-strong hover:bg-error"
-														disabled={slotActionSubmitting === `${slot.id}:remove`}
-													>
-														{slotActionSubmitting === `${slot.id}:remove` ? 'Removing...' : 'Remove'}
-													</button>
-												</form>
-											{/if}
-										</div>
+										<SlotActionsMenu
+											{slot}
+											canMutate={canMutateSlot(slot)}
+											submittingKey={slotActionSubmitting}
+											{slotActionEnhance}
+											onEdit={openEditSlotPanel}
+										/>
 									</td>
 								{/if}
 							</tr>
@@ -965,6 +914,98 @@
 		{/if}
 	</div>
 </section>
+
+{#if editSlotPanelOpen && selectedSlot}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="fixed inset-0 z-40 bg-primary-dark/40 backdrop-blur-sm"
+		onclick={closeEditSlotPanel}
+		onkeydown={(event) => event.key === 'Escape' && closeEditSlotPanel()}
+	></div>
+
+	<div class="fixed inset-y-0 right-0 z-50 w-full overflow-y-auto border-l border-sand bg-surface px-5 py-6 shadow-[-24px_0_80px_rgba(8,39,23,0.16)] sm:max-w-xl sm:px-8">
+		<div class="flex items-start justify-between gap-4">
+			<div class="space-y-2">
+				<p class="section-eyebrow">Edit slot</p>
+				<h2 class="panel-title">{selectedSlot.guideLabel}</h2>
+				<p class="text-sm leading-7 text-on-surface-variant">
+					Update this open slot's schedule details and meeting link.
+				</p>
+			</div>
+
+			<button type="button" class="button-secondary" onclick={closeEditSlotPanel}>Close</button>
+		</div>
+
+		<form method="POST" action="?/updateSlot" class="mt-8 space-y-5" use:enhance={editSlotEnhance}>
+			<input type="hidden" name="slotId" value={selectedSlot.id} />
+
+			{#if editSlotError}
+				<div class="rounded-2xl border border-red-200 bg-error px-4 py-3 text-sm font-medium text-error-strong">
+					{editSlotError}
+				</div>
+			{/if}
+
+			<div class="grid gap-4 sm:grid-cols-2">
+				<div class="space-y-2">
+					<label class="text-sm font-semibold text-on-surface" for="editSlotDate">Date</label>
+					<input
+						id="editSlotDate"
+						name="slotDate"
+						type="date"
+						class="input-base"
+						bind:value={editSlotDate}
+						required
+					/>
+				</div>
+				<div class="space-y-2">
+					<label class="text-sm font-semibold text-on-surface" for="editSlotTime">Time</label>
+					<input
+						id="editSlotTime"
+						name="slotTime"
+						type="time"
+						class="input-base"
+						bind:value={editSlotTime}
+						required
+					/>
+				</div>
+			</div>
+
+			<div class="space-y-2">
+				<label class="text-sm font-semibold text-on-surface" for="editSlotDuration">Duration</label>
+				<input
+					id="editSlotDuration"
+					name="durationMinutes"
+					type="number"
+					min="15"
+					max="480"
+					step="15"
+					class="input-base"
+					bind:value={editSlotDuration}
+					required
+				/>
+			</div>
+
+			<div class="space-y-2">
+				<label class="text-sm font-semibold text-on-surface" for="editMeetingLink">Meeting link</label>
+				<input
+					id="editMeetingLink"
+					name="meetingLink"
+					type="url"
+					class="input-base"
+					placeholder="https://..."
+					bind:value={editMeetingLink}
+				/>
+			</div>
+
+			<div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+				<button type="button" class="button-secondary" onclick={closeEditSlotPanel}>Cancel</button>
+				<button type="submit" class="button-primary" disabled={editSlotSubmitting}>
+					{editSlotSubmitting ? 'Saving...' : 'Save changes'}
+				</button>
+			</div>
+		</form>
+	</div>
+{/if}
 
 {#if publishModalOpen}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->

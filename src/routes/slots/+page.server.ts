@@ -182,6 +182,11 @@ function normalizeDuration(value: string | null) {
 	return Number.isNaN(parsed) || parsed < 15 ? 30 : parsed;
 }
 
+function normalizeEditDuration(value: string | null) {
+	const parsed = Number.parseInt(value ?? '', 10);
+	return Number.isNaN(parsed) || parsed < 15 || parsed > 480 ? null : parsed;
+}
+
 function normalizeMeetingLink(value: FormDataEntryValue | null) {
 	return value?.toString().trim() ?? '';
 }
@@ -595,6 +600,114 @@ export const actions: Actions = {
 			message: `${slotPayloads.length} slots were published for ${getGuideLabel(guide)}.${skippedCount > 0 ? ` ${skippedCount} duplicates were skipped.` : ''}`
 		};
 	},
+	updateSlot: async ({ locals, request }) => {
+		const role = await resolveAppRole(locals);
+		const isStaff = role === 'admin' || role === 'moderator';
+		const isGuide = role === 'guide';
+
+		if (!isStaff && !isGuide) {
+			return fail(403, { message: 'Only staff members can edit slots.' });
+		}
+
+		const formData = await request.formData();
+		const { session } = await locals.safeGetSession();
+		const slotId = formData.get('slotId')?.toString().trim() ?? '';
+		const slotDate = formData.get('slotDate')?.toString().trim() ?? '';
+		const slotTime = normalizeTimeKey(formData.get('slotTime')?.toString().trim() ?? null);
+		const duration = normalizeEditDuration(formData.get('durationMinutes')?.toString() ?? null);
+		const meetingLink = normalizeMeetingLink(formData.get('meetingLink'));
+		const parsedDate = parseDateKey(slotDate);
+
+		if (!slotId) {
+			return fail(400, { message: 'Slot id is required.' });
+		}
+
+		if (!parsedDate || !slotTime) {
+			return fail(400, { message: 'Choose a valid date and time for this slot.' });
+		}
+
+		if (!duration) {
+			return fail(400, { message: 'Duration must be between 15 and 480 minutes.' });
+		}
+
+		if (!isValidMeetingLink(meetingLink)) {
+			return fail(400, { message: 'Please enter a valid https:// link.' });
+		}
+
+		const { data: slot, error: slotError } = await locals.supabase
+			.from('available_slots')
+			.select('id, status, guide_id')
+			.eq('id', slotId)
+			.maybeSingle();
+
+		if (slotError) {
+			return fail(500, { message: slotError.message });
+		}
+
+		if (!slot) {
+			return fail(404, { message: 'That slot could not be found.' });
+		}
+
+		if (isGuide) {
+			const { guideId: myGuideId, error } = await getMyGuideId(locals);
+
+			if (error) {
+				return fail(500, { message: error });
+			}
+
+			if (!myGuideId) {
+				return fail(403, { message: 'Your account is not linked to a guide profile yet.' });
+			}
+
+			if (slot.guide_id !== myGuideId) {
+				return fail(403, { message: 'You can only edit your own slots.' });
+			}
+		}
+
+		if (!STAFF_EDITABLE_SLOT_STATUSES.has((slot.status ?? 'open') as SlotStatus)) {
+			return fail(400, {
+				message: 'Only open or cancelled slots can be edited from this screen.'
+			});
+		}
+
+		const { data: duplicateSlot, error: duplicateError } = await locals.supabase
+			.from('available_slots')
+			.select('id')
+			.eq('guide_id', slot.guide_id)
+			.eq('slot_date', slotDate)
+			.eq('slot_time', `${slotTime}:00`)
+			.neq('id', slotId)
+			.maybeSingle();
+
+		if (duplicateError) {
+			return fail(500, { message: duplicateError.message });
+		}
+
+		if (duplicateSlot) {
+			return fail(409, { message: 'That guide already has a slot at this date and time.' });
+		}
+
+		const { error: updateError } = await locals.supabase
+			.from('available_slots')
+			.update({
+				slot_date: slotDate,
+				slot_time: `${slotTime}:00`,
+				starts_at: toUtcIsoString(slotDate, slotTime),
+				duration_minutes: duration,
+				meeting_link: meetingLink || null,
+				modified_by: session?.user.id ?? null
+			})
+			.eq('id', slotId);
+
+		if (updateError) {
+			return fail(500, { message: updateError.message });
+		}
+
+		return {
+			success: true,
+			message: `Slot updated for ${slotDate} ${formatTimeLabel(slotTime)}.`
+		};
+	},
 	updateSlotStatus: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);
 		const isStaff = role === 'admin' || role === 'moderator';
@@ -740,7 +853,7 @@ export const actions: Actions = {
 			}
 		}
 
-		return { success: true, message: 'Meeting link saved.' };
+		return { success: true, message: 'Meeting link saved.', meetingLink: nextMeetingLink };
 	},
 	updateMeetingLink: async ({ locals, request }) => {
 		const role = await resolveAppRole(locals);
